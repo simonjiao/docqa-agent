@@ -1,0 +1,98 @@
+{
+  "doc_id": "GBT1568-2008键技术条件-e724ad081078fa41",
+  "source_filename": "source.pdf",
+  "probe": {
+    "pdf_type": "scanned_pdf",
+    "pages": 4,
+    "text_chars": 0,
+    "image_blocks": 4,
+    "strategy": "render_pages_then_ocr",
+    "notes": [
+      "PDF has little/no text layer and image blocks; use OCR."
+    ]
+  },
+  "page_count": 4,
+  "chunk_count": 39,
+  "recognition_checks": {
+    "1": [
+      {
+        "stage": "document_recognition",
+        "name": "ocr_confidence",
+        "status": "pass",
+        "detail": "平均 OCR 置信度 81.3；低于阈值时进入人工复核。"
+      },
+      {
+        "stage": "document_recognition",
+        "name": "text_density",
+        "status": "pass",
+        "detail": "本页识别文本长度 217。"
+      },
+      {
+        "stage": "document_recognition",
+        "name": "table_region_detection",
+        "status": "info",
+        "detail": "检测到 0 个疑似表格区域。"
+      }
+    ],
+    "2": [
+      {
+        "stage": "document_recognition",
+        "name": "ocr_confidence",
+        "status": "pass",
+        "detail": "平均 OCR 置信度 85.5；低于阈值时进入人工复核。"
+      },
+      {
+        "stage": "document_recognition",
+        "name": "text_density",
+        "status": "pass",
+        "detail": "本页识别文本长度 594。"
+      },
+      {
+        "stage": "document_recognition",
+        "name": "table_region_detection",
+        "status": "info",
+        "detail": "检测到 0 个疑似表格区域。"
+      }
+    ],
+    "3": [
+      {
+        "stage": "document_recognition",
+        "name": "ocr_confidence",
+        "status": "pass",
+        "detail": "平均 OCR 置信度 87.6；低于阈值时进入人工复核。"
+      },
+      {
+        "stage": "document_recognition",
+        "name": "text_density",
+        "status": "pass",
+        "detail": "本页识别文本长度 1807。"
+      },
+      {
+        "stage": "document_recognition",
+        "name": "table_region_detection",
+        "status": "info",
+        "detail": "检测到 0 个疑似表格区域。"
+      }
+    ],
+    "4": [
+      {
+        "stage": "document_recognition",
+        "name": "ocr_confidence",
+        "status": "pass",
+        "detail": "平均 OCR 置信度 83.8；低于阈值时进入人工复核。"
+      },
+      {
+        "stage": "document_recognition",
+        "name": "text_density",
+        "status": "pass",
+        "detail": "本页识别文本长度 605。"
+      },
+      {
+        "stage": "document_recognition",
+        "name": "table_region_detection",
+        "status": "pass",
+        "detail": "检测到 1 个疑似表格区域。"
+      }
+    ]
+  }
+}

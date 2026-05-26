@@ -1,0 +1,241 @@
+{
+  "doc_id": "GBT1568-2008键技术条件-e724ad081078fa41",
+  "probe": {
+    "pdf_type": "scanned_pdf",
+    "pages": 4,
+    "text_chars": 0,
+    "image_blocks": 4,
+    "strategy": "render_pages_then_ocr",
+    "notes": [
+      "PDF has little/no text layer and image blocks; use OCR."
+    ]
+  },
+  "cases": [
+    {
+      "id": "q1_scope",
+      "question": "本标准规定了什么范围？",
+      "expect": "正文问题",
+      "answer": "根据第2页、第3页、第4页的识别片段：1 范围。；本 标准 规定 了 除 花 键 外 的 各 种 键 的 技术 要 求 .；c) 产品 标准 规定 的 标记 ;。",
+      "evidence_pages": [
+        3,
+        2,
+        4,
+        3
+      ],
+      "checks": [
+        {
+          "stage": "retrieval_validation",
+          "name": "evidence_score",
+          "status": "pass",
+          "detail": "最高检索分数 0.3698，阈值 0.0550。"
+        },
+        {
+          "stage": "answer_grounding",
+          "name": "answer_evidence_overlap",
+          "status": "pass",
+          "detail": "答案字符可由证据覆盖比例约 0.81。"
+        },
+        {
+          "stage": "answer_policy",
+          "name": "no_answer_guard",
+          "status": "pass",
+          "detail": "证据不足时应拒答；证据充分时应给出页码/片段。"
+        },
+        {
+          "stage": "llm_validation",
+          "name": "llm_judge",
+          "status": "not_configured",
+          "detail": "可接入大模型二次判断：证据是否支持答案、是否遗漏表格、是否应拒答。本原型默认不开启外部 API。"
+        },
+        {
+          "stage": "human_validation",
+          "name": "human_review",
+          "status": "pending",
+          "detail": "前端提供人工通过/退回入口，记录问题、答案、证据和复核意见。"
+        }
+      ]
+    },
+    {
+      "id": "q2_strength",
+      "question": "键的抗拉强度要求是多少？",
+      "expect": "正文问题",
+      "answer": "根据第3页的识别片段：1 键 的 抗 拉 强 度 应 大 于 等 于 590 MPa,；2 根据 使 用 要 求 , 由 供 、 需 双方 协议 ,可 对 键 进行 抗 拉 强 度 试验 。；3.",
+      "evidence_pages": [
+        3,
+        3,
+        3,
+        3
+      ],
+      "checks": [
+        {
+          "stage": "retrieval_validation",
+          "name": "evidence_score",
+          "status": "pass",
+          "detail": "最高检索分数 0.4527，阈值 0.0550。"
+        },
+        {
+          "stage": "answer_grounding",
+          "name": "answer_evidence_overlap",
+          "status": "pass",
+          "detail": "答案字符可由证据覆盖比例约 0.84。"
+        },
+        {
+          "stage": "answer_policy",
+          "name": "no_answer_guard",
+          "status": "pass",
+          "detail": "证据不足时应拒答；证据充分时应给出页码/片段。"
+        },
+        {
+          "stage": "llm_validation",
+          "name": "llm_judge",
+          "status": "not_configured",
+          "detail": "可接入大模型二次判断：证据是否支持答案、是否遗漏表格、是否应拒答。本原型默认不开启外部 API。"
+        },
+        {
+          "stage": "human_validation",
+          "name": "human_review",
+          "status": "pending",
+          "detail": "前端提供人工通过/退回入口，记录问题、答案、证据和复核意见。"
+        }
+      ]
+    },
+    {
+      "id": "q3_table",
+      "question": "表 1 中合格质量水平 AQL 和哪些检查项目有关？",
+      "expect": "表格问题",
+      "answer": "根据第3页的识别片段：键 的 检查 项 目 和 合格 质量 水 平 见 表 1, 样 本 大 小 按 GB/T 2828.；其 抽样 方案 为 :合格 质量 水 平 AQL。；1 一 2003 中 一 般 检查 水 平 卫 ,正常 检。",
+      "evidence_pages": [
+        3,
+        3,
+        3,
+        3
+      ],
+      "checks": [
+        {
+          "stage": "retrieval_validation",
+          "name": "evidence_score",
+          "status": "pass",
+          "detail": "最高检索分数 0.2920，阈值 0.0550。"
+        },
+        {
+          "stage": "answer_grounding",
+          "name": "answer_evidence_overlap",
+          "status": "pass",
+          "detail": "答案字符可由证据覆盖比例约 0.86。"
+        },
+        {
+          "stage": "answer_policy",
+          "name": "no_answer_guard",
+          "status": "pass",
+          "detail": "证据不足时应拒答；证据充分时应给出页码/片段。"
+        },
+        {
+          "stage": "llm_validation",
+          "name": "llm_judge",
+          "status": "not_configured",
+          "detail": "可接入大模型二次判断：证据是否支持答案、是否遗漏表格、是否应拒答。本原型默认不开启外部 API。"
+        },
+        {
+          "stage": "human_validation",
+          "name": "human_review",
+          "status": "pending",
+          "detail": "前端提供人工通过/退回入口，记录问题、答案、证据和复核意见。"
+        }
+      ]
+    },
+    {
+      "id": "q4_mark",
+      "question": "包装箱或盒外表面应有哪些标志？",
+      "expect": "正文列表问题",
+      "answer": "根据第3页、第4页的识别片段：1 包装 箱 、 盒 等 外 表面 应 有 以 下 标志 或 标签 :。；5 标志 与 包装；验收 检查 ,标志 与 包装 。",
+      "evidence_pages": [
+        4,
+        4,
+        3,
+        3
+      ],
+      "checks": [
+        {
+          "stage": "retrieval_validation",
+          "name": "evidence_score",
+          "status": "pass",
+          "detail": "最高检索分数 0.2842，阈值 0.0550。"
+        },
+        {
+          "stage": "answer_grounding",
+          "name": "answer_evidence_overlap",
+          "status": "pass",
+          "detail": "答案字符可由证据覆盖比例约 0.72。"
+        },
+        {
+          "stage": "answer_policy",
+          "name": "no_answer_guard",
+          "status": "pass",
+          "detail": "证据不足时应拒答；证据充分时应给出页码/片段。"
+        },
+        {
+          "stage": "llm_validation",
+          "name": "llm_judge",
+          "status": "not_configured",
+          "detail": "可接入大模型二次判断：证据是否支持答案、是否遗漏表格、是否应拒答。本原型默认不开启外部 API。"
+        },
+        {
+          "stage": "human_validation",
+          "name": "human_review",
+          "status": "pending",
+          "detail": "前端提供人工通过/退回入口，记录问题、答案、证据和复核意见。"
+        }
+      ]
+    },
+    {
+      "id": "q5_no_answer",
+      "question": "该标准是否规定了电机噪声测试？",
+      "expect": "无答案问题",
+      "answer": "当前知识库中没有找到足够依据回答该问题，建议补充资料或转人工复核。",
+      "evidence_pages": [
+        3,
+        2,
+        2,
+        3
+      ],
+      "checks": [
+        {
+          "stage": "retrieval_validation",
+          "name": "evidence_score",
+          "status": "pass",
+          "detail": "最高检索分数 0.1353，阈值 0.0550。"
+        },
+        {
+          "stage": "answer_policy",
+          "name": "specific_term_guard",
+          "status": "pass",
+          "detail": "问题中的关键业务词未被证据覆盖，已触发拒答。"
+        },
+        {
+          "stage": "answer_grounding",
+          "name": "answer_evidence_overlap",
+          "status": "warn",
+          "detail": "答案字符可由证据覆盖比例约 0.21。"
+        },
+        {
+          "stage": "answer_policy",
+          "name": "no_answer_guard",
+          "status": "pass",
+          "detail": "证据不足时应拒答；证据充分时应给出页码/片段。"
+        },
+        {
+          "stage": "llm_validation",
+          "name": "llm_judge",
+          "status": "not_configured",
+          "detail": "可接入大模型二次判断：证据是否支持答案、是否遗漏表格、是否应拒答。本原型默认不开启外部 API。"
+        },
+        {
+          "stage": "human_validation",
+          "name": "human_review",
+          "status": "pending",
+          "detail": "前端提供人工通过/退回入口，记录问题、答案、证据和复核意见。"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>智能文档问答 Agent 原型</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <div>
+      <h1>智能文档问答 Agent 原型</h1>
+      <p>PDF 原文图像、OCR 识别内容、检索证据、自检与人工复核并排查看。</p>
+    </div>
+    <div class="actions">
+      <input id="fileInput" type="file" accept="application/pdf" />
+      <button id="uploadBtn">上传并解析</button>
+      <button id="sampleBtn" class="secondary">加载样例 PDF</button>
+    </div>
+  </header>
+
+  <section id="status" class="status">等待上传 PDF。</section>
+
+  <main class="grid">
+    <section class="panel viewer">
+      <div class="panel-head">
+        <h2>PDF 页面</h2>
+        <div class="pager">
+          <button id="prevPage">上一页</button>
+          <span id="pageLabel">- / -</span>
+          <button id="nextPage">下一页</button>
+        </div>
+      </div>
+      <div class="image-wrap">
+        <img id="pageImage" alt="PDF 页面图像" />
+        <canvas id="overlay"></canvas>
+      </div>
+    </section>
+
+    <section class="panel inspector">
+      <div class="tabs">
+        <button class="tab active" data-tab="recognition">识别内容</button>
+        <button class="tab" data-tab="qa">问答与证据</button>
+        <button class="tab" data-tab="review">人工复核记录</button>
+      </div>
+
+      <div id="recognition" class="tab-content active">
+        <h2>页面识别结果</h2>
+        <div id="pageChecks" class="checks"></div>
+        <div id="tableRegions" class="table-regions"></div>
+        <div id="ocrLines" class="ocr-lines"></div>
+      </div>
+
+      <div id="qa" class="tab-content">
+        <h2>文档问答</h2>
+        <textarea id="question" rows="3" placeholder="例如：键的抗拉强度要求是多少？"></textarea>
+        <button id="askBtn">检索并回答</button>
+        <div id="answerBox" class="answer-box"></div>
+        <h3>验证流程</h3>
+        <div id="answerChecks" class="checks"></div>
+        <h3>来源证据</h3>
+        <div id="evidenceBox"></div>
+        <h3>人工复核</h3>
+        <div class="review-form">
+          <select id="reviewResult">
+            <option value="pass">通过</option>
+            <option value="needs_fix">退回修正</option>
+            <option value="uncertain">不确定</option>
+          </select>
+          <input id="reviewNotes" placeholder="复核意见，例如：表格识别需人工确认" />
+          <button id="saveReviewBtn">记录人工复核</button>
+        </div>
+      </div>
+
+      <div id="review" class="tab-content">
+        <h2>人工复核记录</h2>
+        <button id="refreshReviews">刷新</button>
+        <div id="reviewsBox"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
