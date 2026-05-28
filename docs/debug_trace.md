@@ -877,3 +877,57 @@ curl -sS http://127.0.0.1:8000/api/docs/20251229陈海平-e23bf7f4264dfe2c/pages
 默认 Web 存储已用 `/Users/simon/ai-agents/docs-for-test/20251229陈海平.pdf` 重新解析恢复；第 3 页当前可见 API 结果已生效。
 
 剩余风险：当前策略是图表/图片优先的保守门禁；如果真实文档把很矮的单行表格嵌在图片中，可能被抑制。扫描表格 fixture `sample_table_scanned_low_conf.pdf` 已覆盖普通图片内表格不被误杀。
+
+## 2026-05-28 13:37:46 CST 图表孤立刻度 OCR 行修复
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户指出：第 3 页图表区域右侧识别列表最后仍出现单独一行 `3`，OCR 置信度 65/100。
+
+诊断：
+
+```text
+jq 'select(.page_no==3 and .element_type=="ocr_text" and (.text|test("^\\s*3\\s*$")))'
+
+id=p0003-e0603
+text=3
+bbox=[62,690,16,11]
+confidence=65.0
+
+image_object:
+p0003-e0578 bbox=[62,686,852,107]
+```
+
+结论：该 `3` 不是正文，而是第二张染色体拷贝数图表左侧/坐标轴区域的孤立刻度。上一轮只过滤了图片内低置信短 OCR，因此置信度 65 的单数字刻度仍进入了主识别列表。
+
+修复：
+
+- 对“薄图表图片”内的轴刻度式短标签增加过滤，不再只依赖低置信阈值。
+- 过滤范围限定为宽高比很大的嵌入式薄图表图片；全页扫描图片中的短 OCR 文本仍保留，避免误伤扫描文档。
+- 新增单元回归测试：薄图表内 `3` 被过滤，全页扫描图内 `3` 不被过滤。
+
+验证结果：
+
+```text
+.venv/bin/python -m py_compile app/core/parser.py
+passed
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q tests/test_table_structure.py
+7 passed, 5 warnings
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q
+23 passed, 5 warnings
+
+node --check app/web/static/app.js
+passed
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/python scripts/evaluate.py --sample
+5 cases completed with validation checks
+
+curl -sS http://127.0.0.1:8000/api/docs/20251229陈海平-e23bf7f4264dfe2c/pages/3/recognition
+# has_exact_3_line=false
+# table_regions=[]
+# tables=[]
+```
+
+默认 Web 存储已重新解析恢复；第 3 页当前 API 中不再出现单独 `3` 行。

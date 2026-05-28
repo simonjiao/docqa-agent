@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from app.core.parser import process_pdf
+from app.core.parser import _usable_ocr_elements, process_pdf
+from app.core.schemas import ElementArtifact
 from app.core.storage import clean_storage, copy_sample, doc_dir, load_document
 from app.main import ReviewRequest, get_table, list_doc_tables, list_page_tables, save_review
 
@@ -160,6 +161,52 @@ def test_chart_image_rulings_are_not_promoted_to_table():
     assert table_checks
     assert "已抑制" in table_checks[0]["detail"]
     _assert_edge_integrity(doc)
+
+
+def test_thin_chart_axis_ocr_labels_are_not_primary_text_candidates():
+    image = ElementArtifact(
+        element_id="p0001-e0001",
+        doc_id="doc",
+        element_type="image_object",
+        source_type="image",
+        page_id="p0001",
+        page_no=1,
+        bbox=[60, 680, 850, 110],
+    )
+    chart_tick = ElementArtifact(
+        element_id="p0001-e0002",
+        doc_id="doc",
+        element_type="ocr_text",
+        source_type="image_ocr",
+        page_id="p0001",
+        page_no=1,
+        text="3",
+        bbox=[62, 690, 16, 11],
+        confidence=65,
+    )
+    scan_text = ElementArtifact(
+        element_id="p0001-e0003",
+        doc_id="doc",
+        element_type="ocr_text",
+        source_type="image_ocr",
+        page_id="p0001",
+        page_no=1,
+        text="3",
+        bbox=[62, 690, 16, 11],
+        confidence=65,
+    )
+    full_page_image = ElementArtifact(
+        element_id="p0001-e0004",
+        doc_id="doc",
+        element_type="image_object",
+        source_type="image",
+        page_id="p0001",
+        page_no=1,
+        bbox=[0, 0, 900, 1200],
+    )
+
+    assert _usable_ocr_elements([chart_tick], [image]) == []
+    assert _usable_ocr_elements([scan_text], [full_page_image]) == [scan_text]
 
 
 def test_scanned_low_confidence_table_keeps_cells_and_requires_review():

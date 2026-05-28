@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import hashlib
 import os
+import re
 
 import fitz
 
@@ -701,15 +702,39 @@ def _is_image_ocr_noise(ocr_element: ElementArtifact, image_bboxes: List[List[in
     bbox = ocr_element.bbox or []
     if not _valid_bbox(bbox):
         return False
-    if not any(_bbox_overlap_candidate_ratio(bbox, image_bbox) >= 0.85 for image_bbox in image_bboxes):
+    image_bbox = _containing_image_bbox(bbox, image_bboxes, min_overlap=0.85)
+    if image_bbox is None:
         return False
+    compact_text = "".join((ocr_element.text or "").split())
+    if _is_thin_chart_image(image_bbox) and _is_chart_axis_label(compact_text):
+        return True
     confidence = float(ocr_element.confidence or 0)
     if confidence > 45:
         return False
-    compact_text = "".join((ocr_element.text or "").split())
     if len(compact_text) <= 6:
         return True
     return bbox[3] <= 28 and bbox[2] >= 350
+
+
+def _containing_image_bbox(bbox: List[int], image_bboxes: List[List[int]], min_overlap: float) -> Optional[List[int]]:
+    for image_bbox in image_bboxes:
+        if _bbox_overlap_candidate_ratio(bbox, image_bbox) >= min_overlap:
+            return image_bbox
+    return None
+
+
+def _is_thin_chart_image(bbox: List[int]) -> bool:
+    if not _valid_bbox(bbox):
+        return False
+    return bbox[2] / max(1, bbox[3]) >= 4.0 and bbox[3] <= 220
+
+
+def _is_chart_axis_label(text: str) -> bool:
+    if not text:
+        return False
+    if len(text) <= 3:
+        return True
+    return bool(re.fullmatch(r"(Chr)?([0-9]{1,2}|X|Y)", text, flags=re.IGNORECASE))
 
 
 def _table_elements(
