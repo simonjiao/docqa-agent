@@ -463,3 +463,31 @@ Playwright 验证摘要：
 ```
 
 剩余风险：本次验证覆盖了样本文档当前页面的 OCR 行定位；多页证据点击自动翻页仍未实现，当前问题只涉及当前页识别内容列表。
+
+## 2026-05-28 11:28:43 CST Web 测试环境约束
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：不要启动多个 Web 测试环境。
+
+处理摘要：
+
+- 检查当前监听端口，项目只保留 `8000` 上的 `docqa_agent_prototype` 服务。
+- 确认此前临时验证端口 `8010` 没有残留监听。
+- 后续 Web/UI 验证默认复用当前 `8000` 服务；如确需临时端口，必须先检查现有服务并在验证结束后清理。
+
+验证命令：
+
+```bash
+lsof -nP -iTCP:8000 -sTCP:LISTEN
+lsof -nP -iTCP:8010 -sTCP:LISTEN
+tmux list-sessions | rg 'docqa|uvicorn|8010|8000'
+```
+
+结果摘要：
+
+```text
+8000: Python 16916/16919 listening
+8010: no listener
+tmux: docqa_agent_prototype: 1 windows
+```
