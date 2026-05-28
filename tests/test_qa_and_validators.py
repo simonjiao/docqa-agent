@@ -9,9 +9,11 @@ class FakeLLM:
 
     def __init__(self, answer: str):
         self.answer = answer
+        self.system_prompt = ""
         self.user_prompt = ""
 
     async def complete(self, *, system_prompt: str, user_prompt: str) -> str:
+        self.system_prompt = system_prompt
         self.user_prompt = user_prompt
         return self.answer
 
@@ -87,6 +89,29 @@ def test_build_answer_treats_national_standard_alias_as_grounded():
 
     assert result["mode"] == "llm_grounded"
     assert "证据初步可用" in llm.user_prompt
+
+
+def test_build_answer_defaults_ellipsis_to_current_document():
+    evidence = [
+        {
+            "chunk_id": "release",
+            "page": 1,
+            "score": 0.31,
+            "kind": "text",
+            "text": "Technical specifications for keys\n2008-09-22 发布 2009-05-01 实施\n中华人民共和国国家质量监督检验检疫总局发布",
+            "source_block_ids": ["release-block"],
+            "alternative_block_ids": [],
+            "source_group_ids": [],
+            "source_types": ["image_ocr"],
+            "warnings": [],
+        }
+    ]
+    llm = FakeLLM("根据第1页，该标准于 2008 年发布，发布日期为 2008-09-22。")
+    result = build_answer("哪一年发布的", evidence, llm_client=llm)
+
+    assert result["mode"] == "llm_grounded"
+    assert "默认指当前文档或当前标准" in llm.system_prompt
+    assert "不要因为问题省略" in llm.user_prompt
 
 
 def test_answer_checks_fail_when_score_low():

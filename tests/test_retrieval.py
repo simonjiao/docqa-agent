@@ -57,3 +57,42 @@ def test_retriever_expands_national_standard_aliases():
     result = TfidfRetriever(chunks).search("这是什么国标", top_k=1)
 
     assert result[0]["chunk_id"] == "cover"
+
+
+def test_retriever_prioritizes_current_standard_release_date():
+    chunks = [
+        Chunk(
+            id="release",
+            doc_id="d",
+            page=1,
+            text="Technical specifications for keys\n2008-09-22 发布 2009-05-01 实施\n中华人民共和国国家质量监督检验检疫总局发布",
+            source_block_ids=["release-block"],
+            alternative_block_ids=[],
+            source_group_ids=[],
+            source_types=["image_ocr"],
+        ),
+        Chunk(
+            id="product-date",
+            doc_id="d",
+            page=4,
+            text="e) 制造或出厂日期。",
+            source_block_ids=["product-block"],
+            alternative_block_ids=[],
+            source_group_ids=[],
+            source_types=["image_ocr"],
+        ),
+        Chunk(
+            id="storage",
+            doc_id="d",
+            page=4,
+            text="在正常的运输和保管条件下，应保证自出厂之日起一年内不生锈。",
+            source_block_ids=["storage-block"],
+            alternative_block_ids=[],
+            source_group_ids=[],
+            source_types=["image_ocr"],
+        ),
+    ]
+    retriever = TfidfRetriever(chunks)
+
+    assert retriever.search("哪一年发布的", top_k=1)[0]["chunk_id"] == "release"
+    assert retriever.search("发布日期", top_k=1)[0]["chunk_id"] == "release"

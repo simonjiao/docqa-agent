@@ -7,6 +7,10 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from .schemas import Chunk
 
+DATE_TOKEN_RE = r"\d{4}\s*(?:[-./]\s*\d{1,2}\s*[-./]\s*\d{1,2}|年\s*\d{1,2}\s*月\s*\d{1,2}\s*日?)"
+RELEASE_DATE_RE = re.compile(fr"(?:{DATE_TOKEN_RE}\s*发布|发布\s*[:：]?\s*{DATE_TOKEN_RE})")
+IMPLEMENT_DATE_RE = re.compile(fr"(?:{DATE_TOKEN_RE}\s*实施|实施\s*[:：]?\s*{DATE_TOKEN_RE})")
+
 
 def normalize_for_retrieval(text: str) -> str:
     """Normalize OCR text for retrieval.
@@ -58,11 +62,15 @@ class TfidfRetriever:
         if not self.chunks or not query.strip():
             return []
         qv = self.vectorizer.transform([query])
-        scores = cosine_similarity(qv, self.matrix).flatten()
-        order = np.argsort(scores)[::-1][:top_k]
+        base_scores = cosine_similarity(qv, self.matrix).flatten()
+        rank_scores = np.array([
+            min(1.0, float(score) + _metadata_query_boost(query, chunk))
+            for score, chunk in zip(base_scores, self.chunks)
+        ])
+        order = np.argsort(rank_scores)[::-1][:top_k]
         results = []
         for idx in order:
-            score = float(scores[idx])
+            score = float(rank_scores[idx])
             if score <= 0:
                 continue
             chunk = self.chunks[int(idx)]
@@ -79,3 +87,39 @@ class TfidfRetriever:
                 "warnings": chunk.warnings,
             })
         return results
+
+
+def _metadata_query_boost(query: str, chunk: Chunk) -> float:
+    intent = _metadata_query_intent(query)
+    if not intent:
+        return 0.0
+
+    text = re.sub(r"\s+", "", chunk.text)
+    readable_text = re.sub(r"\s+", " ", chunk.text)
+    boost = 0.0
+    if intent == "release_date":
+        if RELEASE_DATE_RE.search(readable_text):
+            boost += 0.25
+        elif "发布" in text and re.search(r"\d{4}", text):
+            boost += 0.08
+        if any(marker in text for marker in ["制造或出厂日期", "出厂日期", "自出厂之日起"]):
+            boost -= 0.08
+    elif intent == "implementation_date":
+        if IMPLEMENT_DATE_RE.search(readable_text):
+            boost += 0.25
+        elif "实施" in text and re.search(r"\d{4}", text):
+            boost += 0.08
+
+    if chunk.page <= 2 and any(marker in text for marker in ["国家标准", "标准化管理委员会", "质量监督检验检疫"]):
+        boost += 0.03
+    return boost
+
+
+def _metadata_query_intent(query: str) -> str:
+    compact = re.sub(r"\s+", "", query).lower()
+    date_ask = any(marker in compact for marker in ["哪年", "哪一年", "年份", "日期", "时间", "什么时候"])
+    if "发布" in compact and date_ask:
+        return "release_date"
+    if "实施" in compact and date_ask:
+        return "implementation_date"
+    return ""

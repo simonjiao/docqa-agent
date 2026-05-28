@@ -1428,3 +1428,51 @@ headers=['| 检查 项 目 |', '| *# |', '| ok mee |', 'col_4']
 验证结果：本次为原因诊断和追踪记录，尚未改动解析逻辑。
 
 剩余风险：国标表格中常见多级表头、合并单元格、符号列、长横线和小数值，需后续加入扫描表格专用预处理与层级表头恢复。
+
+## 2026-05-28 15:12:40 CST 当前文档省略主语问答拒答修复
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户现象：在当前国标文件中追问 `哪一年发布的`，问答返回“没有找到足够依据”，并要求用户明确标准或文件。用户指出当前问答应默认指向正在查看的文件。
+
+诊断：
+
+- `/api/docs/{doc_id}/ask` 已经由 URL 限定在单个当前文档内，但 QA Prompt 没有明确“省略主语默认指当前文档/当前标准”。
+- 检索层对 `哪一年发布的` 可以召回第 1 页 `2008-09-22 发布 2009-05-01 实施`，但证据列表中也混入正文的 `一年内不生锈`、历次版本发布情况等片段，LLM 因问题省略对象和证据混杂而主动要求澄清。
+- 运行全量测试时发现测试使用默认 `storage/`，`clean_storage()` 清掉了当前 Web 文档目录，导致真实 `/ask` 验证先出现 `FileNotFoundError: storage/GBT1568-2008键技术条件-e724ad081078fa41/manifest.json`。
+
+处理：
+
+- 在 `app/core/retrieval.py` 增加发布/实施日期类元数据问题的确定性排序加权：优先包含 `YYYY-MM-DD 发布/实施` 或 `YYYY年M月D日发布/实施` 的 chunk，降低 `制造或出厂日期`、`自出厂之日起` 等正文条款干扰。
+- 在 `app/core/qa.py` 的 system/user prompt 中明确：当前接口已限定在当前打开或上传的单个文档内，省略主语或使用 `这个/该/它` 时默认指当前文档或当前标准；不能仅因省略对象要求用户澄清。
+- 在 `tests/conftest.py` 增加 pytest autouse fixture，将测试 `STORAGE_DIR` 指向临时目录，避免全量测试破坏默认 Web 存储。
+- 从 `data/sample/GBT 1568-2008 键 技术条件.pdf` 恢复默认服务存储中的国标样本文档，并重启 `docqa_agent_prototype` tmux Web 服务。
+
+验证：
+
+```text
+.venv/bin/python - <<'PY'
+... TfidfRetriever 当前国标样本检索 ...
+PY
+Q: 哪一年发布的
+0.3488 c0002 第1页 Technical specifications for keys | 2008-09-22 发布 2009-05-01 实施
+
+.venv/bin/pytest -q tests/test_retrieval.py tests/test_qa_and_validators.py
+10 passed
+
+.venv/bin/pytest -q
+35 passed, 5 warnings
+
+tmux kill-session -t docqa_agent_prototype && tmux new-session -d -s docqa_agent_prototype -c /Users/simon/ai-agents/docqa_agent_prototype './run.sh'
+GET /
+HTTP 200
+
+POST /api/docs/GBT1568-2008键技术条件-e724ad081078fa41/ask
+question=哪一年发布的
+answer=根据提供的证据，标准发布日期为 2008年（具体为2008-09-22发布，2009-05-01实施）【第1页】。
+mode=llm_grounded
+evidence_score=pass
+llm_judge=pass
+```
+
+剩余风险：当前修复覆盖当前文档内发布/实施日期省略主语问题；如果后续出现“谁发布的”“替代哪个版本”等其他元数据追问，需要继续补充对应元数据意图排序规则。
