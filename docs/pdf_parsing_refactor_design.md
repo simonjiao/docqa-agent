@@ -226,6 +226,7 @@ storage/{doc_id}/
   "page_no": 1,
   "block_type": "paragraph",
   "source_type": "hidden_text",
+  "source_group_id": "p0001-g0003",
   "text": "本标准规定了键的技术条件...",
   "bbox": [72, 120, 500, 40],
   "confidence": 0.72,
@@ -298,6 +299,7 @@ storage/{doc_id}/
   "kind": "text",
   "page_range": [1, 1],
   "source_block_ids": ["p0001-b0007", "p0001-b0008"],
+  "alternative_block_ids": ["p0001-b0012"],
   "source_types": ["visible_text", "image_ocr"],
   "confidence": 0.86,
   "warnings": [],
@@ -384,6 +386,72 @@ storage/{doc_id}/
 
 原则：隐藏文本是候选事实源，不是默认可信正文。
 
+### 7.1 OCR PDF 隐藏文本关联方式
+
+OCR PDF 的隐藏文本通常来自扫描图上的 OCR layer。它和页面图像、重新 OCR 文本、可见文本之间应通过“页 + 位置 + 等价组 + chunk 引用”四层关系关联。
+
+关联规则：
+
+1. 页级关联：`hidden_text`、`image_ocr`、`visible_text`、页面图像和表格区域都保留相同的 `page_id`、`page_no`。
+2. 位置关联：所有文本候选都保留 `bbox`；通过 bbox 重叠判断是否对应同一视觉区域。
+3. 等价组关联：同一视觉区域的多个文本候选使用同一个 `source_group_id`，例如隐藏文本和重新 OCR 文本都属于 `p0001-g0003`。
+4. 主备关系：质量评估后，chunk 的 `source_block_ids` 只引用最终采用的主文本 block；未采用但相关的候选写入 `alternative_block_ids`。
+5. 复核关系：人工或 LLM 复核时同时展示主文本、备选文本和页面 bbox，避免只看到脱离页面的隐藏文本。
+
+隐藏文本 block 示例：
+
+```json
+{
+  "block_id": "p0001-b0010",
+  "page_id": "p0001",
+  "page_no": 1,
+  "source_type": "hidden_text",
+  "source_group_id": "p0001-g0003",
+  "text": "本标准规定了键的技术条件",
+  "bbox": [80, 120, 500, 40],
+  "confidence": 0.72,
+  "quality": {
+    "status": "warn",
+    "signals": ["hidden_ocr_layer", "needs_visual_alignment_check"]
+  }
+}
+```
+
+重新 OCR 对照 block 示例：
+
+```json
+{
+  "block_id": "p0001-b0011",
+  "page_id": "p0001",
+  "page_no": 1,
+  "source_type": "image_ocr",
+  "source_group_id": "p0001-g0003",
+  "text": "本标准规定了键的技术条件",
+  "bbox": [82, 121, 498, 42],
+  "confidence": 0.89,
+  "quality": {
+    "status": "pass",
+    "signals": ["matches_hidden_text"]
+  }
+}
+```
+
+chunk 采用关系示例：
+
+```json
+{
+  "chunk_id": "c0001",
+  "text": "本标准规定了键的技术条件",
+  "source_block_ids": ["p0001-b0011"],
+  "alternative_block_ids": ["p0001-b0010"],
+  "source_group_ids": ["p0001-g0003"],
+  "source_types": ["image_ocr"],
+  "warnings": ["hidden_text_available_but_not_primary"]
+}
+```
+
+如果 `hidden_text` 和 `image_ocr` 内容一致且隐藏文本质量更高，可以反过来让 chunk 采用 `hidden_text`，并把 `image_ocr` 放入 `alternative_block_ids`。关键是保留关联和选择原因，而不是丢弃未采用的候选。
+
 ## 8. Markdown 与 HTML 派生物
 
 ### 8.1 Markdown 给 LLM
@@ -436,6 +504,7 @@ upload PDF
   -> OCR pages, image blocks, or regions when needed
   -> table region detection / table extraction
   -> normalize all sources into blocks.jsonl
+  -> link equivalent blocks by source_group_id
   -> quality checks and dedup
   -> build chunks.jsonl
   -> derive Markdown for LLM
