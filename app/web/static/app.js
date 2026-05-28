@@ -86,8 +86,6 @@ function openUploadDialog(event) {
 function drawBox(bbox, imageWidth, imageHeight) {
   const img = $("pageImage");
   const canvas = $("overlay");
-  const rect = img.getBoundingClientRect();
-  const parent = img.parentElement.getBoundingClientRect();
   canvas.width = img.clientWidth;
   canvas.height = img.clientHeight;
   canvas.style.left = `${img.offsetLeft}px`;
@@ -102,6 +100,57 @@ function drawBox(bbox, imageWidth, imageHeight) {
   const [x, y, w, h] = bbox;
   ctx.fillRect(x * scaleX, y * scaleY, w * scaleX, h * scaleY);
   ctx.strokeRect(x * scaleX, y * scaleY, w * scaleX, h * scaleY);
+}
+
+function focusBbox(bbox, imageWidth, imageHeight) {
+  const img = $("pageImage");
+  if (!img.complete || !img.clientWidth || !img.clientHeight) {
+    img.onload = () => focusBbox(bbox, imageWidth, imageHeight);
+    return;
+  }
+  drawBox(bbox, imageWidth, imageHeight);
+  scrollPdfToBboxIfNeeded(bbox, imageWidth, imageHeight);
+}
+
+function scrollPdfToBboxIfNeeded(bbox, imageWidth, imageHeight) {
+  const img = $("pageImage");
+  const wrap = img.closest(".image-wrap");
+  if (!wrap) return;
+
+  const [x, y, w, h] = bbox;
+  const scaleX = img.clientWidth / imageWidth;
+  const scaleY = img.clientHeight / imageHeight;
+  const target = {
+    left: img.offsetLeft + x * scaleX,
+    top: img.offsetTop + y * scaleY,
+    right: img.offsetLeft + (x + w) * scaleX,
+    bottom: img.offsetTop + (y + h) * scaleY
+  };
+  const margin = 24;
+  const visible = {
+    left: wrap.scrollLeft + margin,
+    top: wrap.scrollTop + margin,
+    right: wrap.scrollLeft + wrap.clientWidth - margin,
+    bottom: wrap.scrollTop + wrap.clientHeight - margin
+  };
+  const isVisible = target.left >= visible.left && target.right <= visible.right && target.top >= visible.top && target.bottom <= visible.bottom;
+  if (isVisible) return;
+
+  const targetScrollLeft = clamp(((target.left + target.right) / 2) - (wrap.clientWidth / 2), 0, wrap.scrollWidth - wrap.clientWidth);
+  const targetScrollTop = clamp(((target.top + target.bottom) / 2) - (wrap.clientHeight / 2), 0, wrap.scrollHeight - wrap.clientHeight);
+  wrap.scrollTo({
+    left: target.left < visible.left || target.right > visible.right ? targetScrollLeft : wrap.scrollLeft,
+    top: target.top < visible.top || target.bottom > visible.bottom ? targetScrollTop : wrap.scrollTop,
+    behavior: "smooth"
+  });
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(value, Math.max(min, max)));
+}
+
+function setActiveItem(el, selector) {
+  document.querySelectorAll(selector).forEach(item => item.classList.toggle("active", item === el));
 }
 
 async function loadPage(pageNo) {
@@ -119,7 +168,10 @@ async function loadPage(pageNo) {
       <div class="small">bbox=${t.bbox.join(', ')}；原因=${t.reason}</div>
     </div>
   `).join("");
-  document.querySelectorAll(".table-card").forEach(el => el.onclick = () => drawBox(el.dataset.bbox.split(',').map(Number), page.image_width, page.image_height));
+  document.querySelectorAll(".table-card").forEach(el => el.onclick = () => {
+    setActiveItem(el, ".table-card");
+    focusBbox(el.dataset.bbox.split(',').map(Number), page.image_width, page.image_height);
+  });
 
   $("ocrLines").innerHTML = page.lines.map(line => `
     <div class="ocr-line" data-bbox="${line.bbox.join(',')}">
@@ -127,7 +179,10 @@ async function loadPage(pageNo) {
       <div class="small">${line.id}；置信度 ${line.confidence}</div>
     </div>
   `).join("");
-  document.querySelectorAll(".ocr-line").forEach(el => el.onclick = () => drawBox(el.dataset.bbox.split(',').map(Number), page.image_width, page.image_height));
+  document.querySelectorAll(".ocr-line").forEach(el => el.onclick = () => {
+    setActiveItem(el, ".ocr-line");
+    focusBbox(el.dataset.bbox.split(',').map(Number), page.image_width, page.image_height);
+  });
   $("overlay").getContext("2d").clearRect(0, 0, $("overlay").width, $("overlay").height);
 }
 

@@ -43,6 +43,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .info, .not_configured, .pending { color: #39506e; background: #eef3fa; }
 .ocr-line, .evidence, .review-item, .table-card { border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; margin: 8px 0; background: #fff; }
 .ocr-line:hover { border-color: var(--primary); cursor: pointer; }
+.ocr-line.active, .table-card.active { border-color: var(--primary); background: #f1f6ff; }
+.table-card:hover { border-color: var(--primary); cursor: pointer; }
 .small { color: var(--muted); font-size: 12px; margin-top: 4px; }
 textarea, input, select { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; margin: 8px 0; font: inherit; }
 .answer-box { margin: 10px 0; padding: 12px; background: #eef7ff; border: 1px solid #cfe4ff; border-radius: 8px; white-space: pre-wrap; }

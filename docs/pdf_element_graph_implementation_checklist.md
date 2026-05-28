@@ -97,7 +97,7 @@
 - [x] 新增 OCR PDF 主备测试：图片 OCR 文本进入主 chunk，同区域未采用候选进入 `alternative_for_chunk`。
 - [x] 新增人工复核测试：`reviews.jsonl` 记录必须生成 `review` element 和 `review_of` edge。
 - [x] 运行 `.venv/bin/pytest -q`。
-- [x] 运行 `python scripts/evaluate.py --sample`。
+- [x] 运行 `.venv/bin/python scripts/evaluate.py --sample`。
 
 ## 10. 文档与提交
 

@@ -752,13 +752,13 @@ upload PDF
 - 主备追溯：hidden/OCR/visible 候选必须能通过 `source_group_id` 或 edge 关联。
 - Markdown 派生：包含 block_id/source_type 注释。
 - HTML 派生：能引用页面图片和 block bbox。
-- 兼容性：现有 `pytest -q` 和 `python scripts/evaluate.py --sample` 仍能通过。
+- 兼容性：现有 `.venv/bin/pytest -q` 和 `.venv/bin/python scripts/evaluate.py --sample` 仍能通过。
 
 基础验收命令：
 
 ```bash
-pytest -q
-python scripts/evaluate.py --sample
+.venv/bin/pytest -q
+.venv/bin/python scripts/evaluate.py --sample
 ```
 
 ## 14. 风险与取舍

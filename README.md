@@ -129,13 +129,13 @@ AGENTS.md                 项目协作规则与调试跟踪要求
 ## 7. 测试
 
 ```bash
-pytest -q
+.venv/bin/pytest -q
 ```
 
 运行评估脚本：
 
 ```bash
-python scripts/evaluate.py --sample
+.venv/bin/python scripts/evaluate.py --sample
 ```
 
 ## 8. 当前取舍与限制

@@ -416,3 +416,50 @@ docqa_agent_prototype: 1 windows
 ```
 
 剩余风险：`run.sh` 依赖 `uvicorn` 在 PATH 中；当前重启采用 `.venv/bin/uvicorn`，后续如需一键脚本在非交互 shell 中稳定运行，可考虑让 `run.sh` 优先使用 `.venv/bin/uvicorn`。
+
+## 2026-05-28 11:25:51 CST 识别行定位滚动与 Playwright 安装
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：点击识别内容某一行时，PDF 应滑动到相关位置；如果相关位置已经在当前显示区域内，则不要移动。随后要求安装 Playwright。
+
+处理摘要：
+
+- 前端点击 `ocr-line` 和 `table-card` 时，不再只画 bbox；现在会检查 bbox 是否完整落在 PDF 可视区域内。
+- 如果 bbox 已经可见，保持当前 PDF 滚动位置；如果不可见，按 bbox 中心平滑滚动到对应位置。
+- 增加当前识别行/表格卡片 active 状态，便于确认当前定位对象。
+- 更新静态资源 query string，避免浏览器继续使用旧 `app.js`/`style.css`。
+- 安装 Playwright Chromium 浏览器缓存，后续可直接使用 headless Chromium 做本地 UI 验证。
+- 顺手补齐本地启动脚本的同类问题：`run.sh` 优先使用 `.venv/bin/uvicorn`，文档中的测试/评估命令改为 `.venv/bin/...`。
+
+遇到的问题：
+
+```text
+Playwright 包存在，但初次运行缺少 Chromium/headless-shell 浏览器缓存。
+```
+
+修复命令：
+
+```bash
+NODE_PATH=/Users/simon/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules \
+/Users/simon/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node \
+/Users/simon/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/.pnpm/playwright@1.60.0/node_modules/playwright/cli.js install chromium
+```
+
+验证命令：
+
+```bash
+node --check app/web/static/app.js
+curl -sS -o /tmp/docqa_agent_prototype_root.html -w '%{http_code}\n' http://127.0.0.1:8000/
+PATH=/usr/bin:/bin OCR_LANG=HanS+eng STORAGE_DIR=./storage PORT=8010 ./run.sh
+```
+
+Playwright 验证摘要：
+
+```text
+可见第一行点击后 scrollTop=0。
+不可见底部行首次点击后 scrollTop=259。
+同一底部行再次点击后 scrollTop=259，scrollDeltaSecondClick=0。
+```
+
+剩余风险：本次验证覆盖了样本文档当前页面的 OCR 行定位；多页证据点击自动翻页仍未实现，当前问题只涉及当前页识别内容列表。

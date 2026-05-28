@@ -62,8 +62,8 @@
 ## 6. 测试脚本
 
 ```bash
-pytest -q
-python scripts/evaluate.py --sample
+.venv/bin/pytest -q
+.venv/bin/python scripts/evaluate.py --sample
 ```
 
 展示点：
