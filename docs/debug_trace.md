@@ -565,3 +565,24 @@ evaluate.py --sample completed; sample probe pdf_type=scan_pdf
 ```
 
 剩余风险：真实文本层 PDF 的阅读顺序和断行仍依赖 PDF span/bbox 质量；当前按视觉行合并，尚未做跨行段落重组。
+
+## 2026-05-28 11:56:31 CST 置信度展示语义
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：继续说明并处理“置信度数值代表什么”。
+
+处理摘要：
+
+- 复用当前 `8000` 服务，没有启动新的 Web 测试环境。
+- 原 UI 对所有识别行统一显示 `置信度 <number>`，会把文本层 block 的 `1.0` 误解为 OCR 百分比。
+- 后端识别行增加 `confidence_display` 字段，按来源生成展示文案。
+- OCR 来源显示 `OCR置信度 x/100`；文本层来源显示 `文本层抽取`；隐藏文本、表单字段等来源显示对应来源说明。
+- 前端识别列表优先显示 `confidence_display`，没有该字段时才回退旧的数字显示。
+
+验证摘要：
+
+```text
+visible_text primary block: confidence_display=文本层抽取
+image_ocr fallback line: confidence_display=OCR置信度 96.4/100
+```

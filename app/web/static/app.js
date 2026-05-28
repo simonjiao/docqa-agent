@@ -176,7 +176,7 @@ async function loadPage(pageNo) {
   $("ocrLines").innerHTML = page.lines.map(line => `
     <div class="ocr-line" data-bbox="${line.bbox.join(',')}">
       <div>${line.text}</div>
-      <div class="small">${line.id}；置信度 ${line.confidence}</div>
+      <div class="small">${line.id}；${line.confidence_display || `置信度 ${line.confidence}`}</div>
     </div>
   `).join("");
   document.querySelectorAll(".ocr-line").forEach(el => el.onclick = () => {

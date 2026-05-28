@@ -34,3 +34,26 @@ def test_page_recognition_prefers_primary_blocks_over_raw_ocr_lines():
     assert lines[0]["id"] == "p0001-b0001"
     assert lines[0]["text"] == "多智能体平台JD"
     assert lines[0]["source_type"] == "visible_text"
+    assert lines[0]["confidence_display"] == "文本层抽取"
+
+
+def test_page_recognition_formats_ocr_confidence_when_no_primary_blocks():
+    doc = {
+        "blocks": [],
+        "elements": [
+            {
+                "element_id": "p0001-e0009",
+                "page_no": 1,
+                "element_type": "ocr_text",
+                "source_type": "image_ocr",
+                "text": "扫描文字",
+                "bbox": [10, 20, 300, 40],
+                "confidence": 96.4,
+                "raw_ref": {"ocr_line_id": "p1-l1"},
+            }
+        ],
+    }
+
+    lines = _page_recognition_lines(doc, 1)
+
+    assert lines[0]["confidence_display"] == "OCR置信度 96.4/100"

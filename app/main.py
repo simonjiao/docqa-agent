@@ -130,6 +130,7 @@ def _page_recognition_lines(doc: Dict[str, Any], page_no: int) -> list[dict[str,
             "confidence": block.get("confidence") or 0,
             "source_type": ",".join(block.get("source_types", [])),
             "source_group_id": ",".join(block.get("source_group_ids", [])),
+            "confidence_display": _confidence_display(block.get("source_types", []), block.get("confidence")),
         }
         for block in doc["blocks"]
         if block.get("page_no") == page_no and block.get("role", "primary") == "primary"
@@ -147,10 +148,36 @@ def _page_recognition_lines(doc: Dict[str, Any], page_no: int) -> list[dict[str,
             "confidence": element.get("confidence") or 0,
             "source_type": element.get("source_type"),
             "source_group_id": element.get("source_group_id"),
+            "confidence_display": _confidence_display([element.get("source_type")], element.get("confidence")),
         }
         for element in doc["elements"]
         if element.get("page_no") == page_no and element.get("element_type") == "ocr_text"
     ]
+
+
+def _confidence_display(source_types: list[Any], confidence: Any) -> str:
+    sources = {str(source_type) for source_type in source_types if source_type}
+    if any("ocr" in source_type for source_type in sources):
+        return f"OCR置信度 {_format_confidence(confidence)}/100"
+    if "visible_text" in sources:
+        return "文本层抽取"
+    if "hidden_text" in sources:
+        return "隐藏文本层"
+    if "form_field" in sources:
+        return "表单字段"
+    if confidence is None:
+        return "来源置信度未记录"
+    return f"来源置信度 {_format_confidence(confidence)}"
+
+
+def _format_confidence(confidence: Any) -> str:
+    try:
+        value = float(confidence)
+    except (TypeError, ValueError):
+        return "0"
+    if value.is_integer():
+        return str(int(value))
+    return f"{value:.1f}"
 
 
 def _get_retriever(doc_id: str) -> TfidfRetriever:
