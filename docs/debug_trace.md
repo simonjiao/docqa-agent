@@ -715,3 +715,33 @@ STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q
 STORAGE_DIR=$(mktemp -d) .venv/bin/python scripts/evaluate.py --sample
 5 cases completed with validation checks
 ```
+
+## 2026-05-28 13:14:32 CST 第 2 页说明文字被误判为无框表格
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户指出：正在查看的文档 `20251229陈海平-e23bf7f4264dfe2c` 第 2 页被识别为表格，需解释原因。
+
+诊断命令与关键输出：
+
+```text
+curl -sS http://127.0.0.1:8000/api/docs/20251229陈海平-e23bf7f4264dfe2c/pages/2/recognition | jq '{table_regions: .page.table_regions}'
+
+table_regions[0].reason = "text_alignment"
+table_regions[0].bbox = [52, 82, 888, 970]
+structured table strategy = "borderless_alignment"
+row_count = 25
+column_count = 14
+```
+
+页面级 OCR 检测显示 `table_region_count=0`，说明原始 ruling-line 检测没有发现表格线；后续 `table_parser.v1.borderless_region` 由于文本 bbox 对齐触发了无框表格候选。
+
+根因：
+
+- 第 2 页是说明文字和编号列表，不是表格。
+- `parse_tables()` 在没有表格线区域时会调用 `_infer_borderless_region()`。
+- `_infer_borderless_region()` 只要求多行文本中存在至少 2 个对齐的 x 中心点。
+- 本页大量编号、英文缩写、百分比、斜杠和长句片段具有重复 x 坐标；复现统计中 `rows>=2` 为 25，aligned centers 为 14 个，因此被当成 25 行 x 14 列的无框表格。
+- 当前质量门禁虽然给出 `table_text_assignment=warn` 和 `table_header_quality=warn`，但没有把这类高空单元格、列表型文本、伪表头的候选降级或拒绝，最终状态仍为 `pass`。
+
+当前结论：这是无框表格检测阈值过宽造成的 false positive；应增加无框表格的负样本门禁，例如列表密度、伪表头比例、空单元格率、全文段落连续性、列稳定性和候选区域覆盖范围约束。
