@@ -66,6 +66,15 @@ def apply_document_recognition_rules(
                 profile=profile,
             )
         )
+        applied.extend(
+            _apply_metadata_line_rules(
+                page_no=page_no,
+                image_width=image_width,
+                image_height=image_height,
+                ocr_elements=ocr_elements,
+                profile=profile,
+            )
+        )
         rule_ids, element_ids = _apply_suppressions(
             page_no=page_no,
             image_width=image_width,
@@ -88,7 +97,7 @@ def is_ignored_by_recognition_rule(element: ElementArtifact) -> bool:
 
 def is_excluded_from_primary_text(element: ElementArtifact) -> bool:
     signals = element.quality.get("signals", [])
-    return is_ignored_by_recognition_rule(element) or "page_number" in signals
+    return is_ignored_by_recognition_rule(element) or "not_body_text" in signals
 
 
 def _load_rule_profiles() -> List[Dict[str, Any]]:
@@ -295,16 +304,59 @@ def _apply_page_number_rules(
             text = element.text.strip()
             if not text or not any(pattern.fullmatch(text) for pattern in patterns):
                 continue
-            element.raw_ref["semantic_type"] = "page_number"
-            element.raw_ref.setdefault("recognition_rule_ids", [])
-            if rule_id not in element.raw_ref["recognition_rule_ids"]:
-                element.raw_ref["recognition_rule_ids"].append(rule_id)
-            element.quality.setdefault("signals", [])
-            for signal in ["external_rule_applied", "page_number", "not_body_text"]:
-                if signal not in element.quality["signals"]:
-                    element.quality["signals"].append(signal)
+            _mark_metadata_line(
+                element,
+                rule_id,
+                semantic_type="page_number",
+                signals=["page_number", "not_body_text"],
+            )
             applied.append(rule_id)
     return applied
+
+
+def _apply_metadata_line_rules(
+    *,
+    page_no: int,
+    image_width: int,
+    image_height: int,
+    ocr_elements: List[ElementArtifact],
+    profile: Dict[str, Any],
+) -> List[str]:
+    applied: List[str] = []
+    for rule in profile.get("metadata_line_rules", []):
+        if not _page_matches(rule, page_no):
+            continue
+        rule_id = f"{profile['id']}.{rule['id']}"
+        region_bbox = _ratio_bbox(rule.get("bbox_ratio", []), image_width, image_height)
+        patterns = [re.compile(pattern, flags=re.IGNORECASE) for pattern in rule.get("patterns", [])]
+        for element in ocr_elements:
+            bbox = element.bbox or []
+            if region_bbox is not None and _bbox_overlap_candidate_ratio(bbox, region_bbox) < float(rule.get("min_overlap", 0.95)):
+                continue
+            if not _within_ratio_limits(bbox, image_width, image_height, rule):
+                continue
+            text = element.text.strip()
+            if not text or not any(pattern.fullmatch(text) for pattern in patterns):
+                continue
+            _mark_metadata_line(
+                element,
+                rule_id,
+                semantic_type=str(rule.get("semantic_type") or "metadata_line"),
+                signals=[str(signal) for signal in rule.get("signals", ["metadata_line", "not_body_text"])],
+            )
+            applied.append(rule_id)
+    return applied
+
+
+def _mark_metadata_line(element: ElementArtifact, rule_id: str, *, semantic_type: str, signals: List[str]) -> None:
+    element.raw_ref["semantic_type"] = semantic_type
+    element.raw_ref.setdefault("recognition_rule_ids", [])
+    if rule_id not in element.raw_ref["recognition_rule_ids"]:
+        element.raw_ref["recognition_rule_ids"].append(rule_id)
+    element.quality.setdefault("signals", [])
+    for signal in ["external_rule_applied", *signals]:
+        if signal not in element.quality["signals"]:
+            element.quality["signals"].append(signal)
 
 
 def _within_ratio_limits(bbox: List[int], image_width: int, image_height: int, rule: Dict[str, Any]) -> bool:

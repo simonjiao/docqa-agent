@@ -196,7 +196,7 @@ def _page_recognition_lines(doc: Dict[str, Any], page_no: int) -> list[dict[str,
         for element in doc["elements"]
         if element.get("page_no") == page_no and element.get("element_type") == "ocr_text"
         and element.get("quality", {}).get("status") != "ignored"
-        and "page_number" not in element.get("quality", {}).get("signals", [])
+        and "not_body_text" not in element.get("quality", {}).get("signals", [])
     ]
 
 

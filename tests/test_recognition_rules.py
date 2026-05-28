@@ -1,6 +1,6 @@
 from PIL import Image
 
-from app.core.recognition_rules import apply_document_recognition_rules, is_ignored_by_recognition_rule
+from app.core.recognition_rules import apply_document_recognition_rules, is_excluded_from_primary_text, is_ignored_by_recognition_rule
 from app.core.schemas import ElementArtifact
 
 
@@ -110,3 +110,32 @@ def test_gb_running_title_rewrite_is_region_scoped(monkeypatch, tmp_path):
 
     assert title.text == "键 技术条件"
     assert body.text == "键 RARE 是一个示例变量。"
+
+
+def test_body_standard_number_header_is_metadata(monkeypatch, tmp_path):
+    image_path = tmp_path / "page.png"
+    Image.new("RGB", (945, 1370), "white").save(image_path)
+    monkeypatch.setattr("app.core.recognition_rules._ocr_region", lambda image_path, bbox, rule: "")
+    header_right = _ocr_element(1, "GB/T 1568—2008", [718, 101, 138, 31])
+    header_left = _ocr_element(2, "GB/T 1568—2008", [87, 105, 137, 15])
+    body_reference = _ocr_element(3, "本标准是对 GB/T 1568—1997 的修订。", [140, 254, 402, 29])
+    for element in [header_right, header_left, body_reference]:
+        element.page_id = "p0003"
+        element.page_no = 3
+
+    apply_document_recognition_rules(
+        doc_id="GBT1568-2008键技术条件-e724ad081078fa41",
+        source_filename="source.pdf",
+        page_no=3,
+        image_path=image_path,
+        image_width=945,
+        image_height=1370,
+        page_elements=[],
+        ocr_elements=[header_right, header_left, body_reference],
+    )
+
+    assert header_right.raw_ref["semantic_type"] == "standard_number_header"
+    assert header_left.raw_ref["semantic_type"] == "standard_number_header"
+    assert is_excluded_from_primary_text(header_right)
+    assert is_excluded_from_primary_text(header_left)
+    assert not is_excluded_from_primary_text(body_reference)

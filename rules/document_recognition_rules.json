@@ -87,6 +87,20 @@
           "max_height_ratio": 0.035
         }
       ],
+      "metadata_line_rules": [
+        {
+          "id": "body_standard_number_header",
+          "semantic_type": "standard_number_header",
+          "bbox_ratio": [0.0, 0.0, 1.0, 0.12],
+          "patterns": [
+            "^GB\\s*/\\s*T\\s*\\d+(?:\\.\\s*\\d+)?\\s*[—-]\\s*\\d{4}$",
+            "^GB\\s+\\d+(?:\\.\\s*\\d+)?\\s*[—-]\\s*\\d{4}$"
+          ],
+          "max_width_ratio": 0.25,
+          "max_height_ratio": 0.04,
+          "signals": ["standard_number_header", "not_body_text"]
+        }
+      ],
       "suppressions": [
         {
           "id": "cover_gb_logo_noise",

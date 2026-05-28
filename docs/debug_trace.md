@@ -1340,3 +1340,55 @@ HTTP 200
 ```
 
 剩余风险：当前修复覆盖标准身份类问题；如果后续出现行业缩写、产品型号、公式别名等检索失败，需要继续以同义词/查询扩展方式补充，而不是在 QA 阶段编造答案。
+
+## 2026-05-28 15:05:03 CST 正文页页眉国标标准号处理
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：正文部分左上角或右上角出现的是国标标准号，应按页眉元数据处理。
+
+诊断：
+
+- 当前国标样本中，第 2 页右上、第 3 页右上、第 4 页左上分别有 `GB/T 1568—2008`。
+- 这些元素此前作为普通 OCR 文本进入 block/chunk，污染正文识别和问答证据。
+- 封面页的 `GB/T 1568—2008` 位于页面中部，是文档身份信息，不应按正文页页眉过滤。
+
+处理：
+
+- 在 `rules/document_recognition_rules.json` 增加 `metadata_line_rules.body_standard_number_header`。
+- 匹配页面顶部 12% 区域内的 `GB/T xxxx—yyyy` 或 `GB xxxx—yyyy`，并限制高度/宽度，避免匹配正文标准引用。
+- 在 `app/core/recognition_rules.py` 增加通用 metadata line 标记逻辑，将命中项标记为 `semantic_type=standard_number_header`、`standard_number_header`、`not_body_text`。
+- `app/main.py` 和 parser 的正文候选过滤统一使用 `not_body_text`，页码和页眉标准号都保留在 `elements.jsonl`，但不进入正文 block/chunk 或识别内容列表。
+
+验证：
+
+```text
+FORCE_REPROCESS=1 .venv/bin/python - <<'PY'
+from pathlib import Path
+from app.core.parser import process_pdf
+from app.core.storage import load_document
+
+doc_id='GBT1568-2008键技术条件-e724ad081078fa41'
+pdf_path=Path('storage')/doc_id/'raw'/'source.pdf'
+process_pdf(doc_id,pdf_path)
+doc=load_document(doc_id)
+for e in doc['elements']:
+    if e.get('raw_ref', {}).get('semantic_type') == 'standard_number_header':
+        print(e['page_no'], e['bbox'], e['text'], e['quality']['signals'])
+PY
+2 [739, 94, 138, 15] GB/T 1568—2008 ['external_rule_applied', 'standard_number_header', 'not_body_text']
+3 [718, 101, 138, 31] GB/T 1568—2008 ['external_rule_applied', 'standard_number_header', 'not_body_text']
+4 [87, 105, 137, 15] GB/T 1568—2008 ['external_rule_applied', 'standard_number_header', 'not_body_text']
+
+GET /api/docs/GBT1568-2008键技术条件-e724ad081078fa41/pages/3/recognition
+前 4 行：键 技术条件；1 范围；本标准规定了...；2 规范性引用文件
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q
+33 passed, 5 warnings
+
+tmux kill-session -t docqa_agent_prototype && tmux new-session -d -s docqa_agent_prototype -c /Users/simon/ai-agents/docqa_agent_prototype './run.sh'
+GET /
+HTTP 200
+```
+
+剩余风险：当前规则覆盖正文页顶部页眉标准号；如果其他标准文件的页眉区域更低、标准号格式不同，继续通过外置规则扩展。
