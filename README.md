@@ -81,10 +81,12 @@ docs/
   architecture.md         架构说明
   validation_workflow.md  验证流程说明
   demo_script.md          演示脚本
+  debug_trace.md          调试过程跟踪记录
 scripts/
   evaluate.py             样例问题评估脚本
 tests/
   pytest 单元测试
+AGENTS.md                 项目协作规则与调试跟踪要求
 ```
 
 ## 4. 处理流程
