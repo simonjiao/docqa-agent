@@ -77,7 +77,7 @@ storage/{doc_id}/
 | `text_pdf` | 可抽取文本充足，字体和文本 block 正常，图片不是主体 | 直接抽取 PDF 文本，保留 bbox 和阅读顺序；必要时抽样渲染校验 | `visible_text` blocks |
 | `scan_pdf` | 文本层为空或极少，每页大图覆盖主体内容 | 整页渲染后 OCR；OCR 置信度低时进入人工复核 | `image_ocr` blocks、page image |
 | `ocr_pdf` | 页面像扫描图，但存在可搜索文本层或不可见文本层 | 抽取隐藏文本并做质量评估；必要时重新 OCR 对照，不直接信任文本层 | `hidden_text` blocks、可选 `image_ocr` blocks |
-| `mixed_pdf` | 不同页或同页同时出现文本、扫描图、表格、批注 | 逐页选择文本抽取、OCR 或混合策略；chunk 保留多来源 metadata | 多种 source_type blocks |
+| `mixed_pdf` | 不同页或同页同时出现文本、扫描图、含文字图片、表格、批注 | 逐页、逐区域选择文本抽取、图片保留或区域 OCR；chunk 保留多来源 metadata | 多种 source_type blocks |
 | `form_pdf` | 存在 AcroForm/XFA 字段或字段值不完整显示在页面文本中 | 读取表单字段；同时渲染页面用于视觉核对；字段值单独保存 | `form_field` blocks |
 | `protected_pdf` | 加密、需要密码，或权限限制复制/抽取/打印 | 先做权限预检；不能打开则提示用户提供授权密码；权限不足时不静默绕过 | manifest permission 状态、错误或降级策略 |
 | `drawing_pdf` | 大量矢量线条、CAD/图纸/地图，普通文本抽取很少 | 保留页面图和图形/文本候选；OCR 只处理标签文字；标记需要版面/视觉理解 | `image`、`visible_text`、低置信 review blocks |
@@ -245,12 +245,18 @@ storage/{doc_id}/
 
 - `visible_text`：PDF 可见文本对象。
 - `hidden_text`：隐藏 OCR 文本层或不可见文本。
-- `image_ocr`：对渲染图重新 OCR 得到的文本。
+- `image_ocr`：对整页渲染图或局部图片区域 OCR 得到的文本。
 - `form_field`：PDF 表单字段值。
 - `annotation`：批注、签名、注释。
 - `table_cell`：表格单元格。
 - `image`：图片或非文本区域。
 - `drawing_element`：图纸、地图、CAD 类矢量线条或区域。
+
+图片相关 block 应区分 `source_type` 和 `block_type`：
+
+- `source_type=image` 表示原始视觉证据，例如照片、截图、扫描图、印章、Logo、图表。
+- `source_type=image_ocr` 表示从图片或页面区域 OCR 派生出的文字。
+- `block_type=figure|screenshot|stamp|chart|scan_region|text_in_image` 用于描述图片或图片 OCR 的业务形态。
 
 ### 6.4 protected_pdf 权限处理
 
@@ -298,6 +304,65 @@ storage/{doc_id}/
   "review_status": "pending"
 }
 ```
+
+### 6.6 图片与图片内文字的父子关系
+
+图片不应简单等同于可检索文本。改造后应先保留原始图片 block，再按需要对图片区域做 OCR，并把 OCR 结果作为子 block 保存。
+
+处理规则：
+
+1. 明确的纯图片，例如照片、Logo、装饰图、无文字示意图，保存为 `source_type=image`，默认不进入文本 chunk。
+2. 混合了文字的图片，例如截图、扫描表格、图片格式说明、印章文字，先保存原图片 block，再对图片区域 OCR。
+3. OCR 产生的文字保存为 `source_type=image_ocr`，通过 `parent_block_id` 指向原图片 block。
+4. 如果图片 OCR 和同区域 `visible_text` 或 `hidden_text` 重复，按 bbox 重叠和文本相似度去重；不能确定时保留两份并加 warning。
+5. chunk 默认只引用 `image_ocr`、`visible_text`、`hidden_text`、`form_field` 等文本 block；如果答案需要视觉证据，再附带父图片 block。
+
+原图片 block 示例：
+
+```json
+{
+  "block_id": "p0002-b0010",
+  "doc_id": "GBT1568-2008-e724ad081078fa41",
+  "page_id": "p0002",
+  "page_no": 2,
+  "block_type": "screenshot",
+  "source_type": "image",
+  "bbox": [80, 300, 600, 240],
+  "reading_order": 10,
+  "links": {
+    "image_path": "images/blocks/p0002-b0010.png",
+    "page_image_path": "images/page-0002.png"
+  },
+  "quality": {
+    "status": "info",
+    "signals": ["contains_text_candidate"]
+  }
+}
+```
+
+图片 OCR 子 block 示例：
+
+```json
+{
+  "block_id": "p0002-b0011",
+  "parent_block_id": "p0002-b0010",
+  "doc_id": "GBT1568-2008-e724ad081078fa41",
+  "page_id": "p0002",
+  "page_no": 2,
+  "block_type": "text_in_image",
+  "source_type": "image_ocr",
+  "text": "检验项目 合格质量水平 AQL",
+  "bbox": [95, 330, 560, 80],
+  "confidence": 0.78,
+  "reading_order": 11,
+  "quality": {
+    "status": "warn",
+    "signals": ["derived_from_image", "needs_visual_review"]
+  }
+}
+```
+
+这样做的好处是：原图可以给人工和视觉模型复核，图片文字可以进入 RAG，二者通过 `parent_block_id` 保持可追溯关系。
 
 ## 7. 隐藏文本处理策略
 
@@ -366,8 +431,9 @@ upload PDF
   -> document probe
   -> page probe
   -> extract visible/hidden text blocks
+  -> detect image blocks and text-in-image candidates
   -> render page images
-  -> OCR pages or regions when needed
+  -> OCR pages, image blocks, or regions when needed
   -> table region detection / table extraction
   -> normalize all sources into blocks.jsonl
   -> quality checks and dedup
