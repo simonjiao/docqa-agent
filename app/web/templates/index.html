@@ -12,13 +12,12 @@
       <h1>智能文档问答 Agent 原型</h1>
       <p>PDF 原文图像、OCR 识别内容、检索证据、自检与人工复核并排查看。</p>
     </div>
-    <div class="actions">
-      <input id="fileInput" type="file" accept="application/pdf" />
-      <button id="uploadBtn">上传并解析</button>
-    </div>
   </header>
 
-  <section id="status" class="status">等待上传 PDF。</section>
+  <section id="status" class="status upload-status" role="button" tabindex="0" aria-disabled="false">
+    <input id="fileInput" type="file" accept="application/pdf" />
+    <span id="statusText">等待上传 PDF。</span>
+  </section>
 
   <main class="grid">
     <section class="panel viewer">

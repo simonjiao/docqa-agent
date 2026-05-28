@@ -4,12 +4,19 @@ let state = {
   currentPage: 1,
   lastQuestion: "",
   lastAnswer: "",
-  lastEvidence: []
+  lastEvidence: [],
+  isUploading: false
 };
 
 const $ = (id) => document.getElementById(id);
 
-function setStatus(text) { $("status").textContent = text; }
+function setStatus(text) { $("statusText").textContent = text; }
+
+function setUploadBusy(isBusy) {
+  state.isUploading = isBusy;
+  $("status").classList.toggle("busy", isBusy);
+  $("status").setAttribute("aria-disabled", String(isBusy));
+}
 
 function badge(status) {
   return `<span class="badge ${status}">${status}</span>`;
@@ -51,10 +58,21 @@ async function uploadPdf() {
   if (!file) { setStatus("请先选择 PDF 文件。"); return; }
   const form = new FormData();
   form.append("file", file);
+  setUploadBusy(true);
   setStatus("正在上传并进行 OCR，请稍候……");
-  const res = await fetch("/api/upload", { method: "POST", body: form });
-  if (!res.ok) { setStatus(await res.text()); return; }
-  await loadDocMeta(await res.json());
+  try {
+    const res = await fetch("/api/upload", { method: "POST", body: form });
+    if (!res.ok) { setStatus(await res.text()); return; }
+    await loadDocMeta(await res.json());
+  } finally {
+    $("fileInput").value = "";
+    setUploadBusy(false);
+  }
+}
+
+function openUploadDialog() {
+  if (state.isUploading) return;
+  $("fileInput").click();
 }
 
 function drawBox(bbox, imageWidth, imageHeight) {
@@ -149,7 +167,14 @@ async function loadReviews() {
   `).join("") || "<p class='small'>暂无人工复核记录。</p>";
 }
 
-$("uploadBtn").onclick = uploadPdf;
+$("status").onclick = openUploadDialog;
+$("status").onkeydown = (event) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    openUploadDialog();
+  }
+};
+$("fileInput").onchange = uploadPdf;
 $("prevPage").onclick = () => loadPage(state.currentPage - 1);
 $("nextPage").onclick = () => loadPage(state.currentPage + 1);
 $("askBtn").onclick = ask;
