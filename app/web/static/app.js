@@ -144,6 +144,7 @@ async function ask() {
   $("evidenceBox").innerHTML = state.lastEvidence.map(ev => `
     <div class="evidence">
       <strong>${ev.chunk_id}</strong> / 第 ${ev.page} 页 / score=${ev.score} / ${ev.kind}
+      <div class="small">source_types=${(ev.source_types || []).join(", ")}；blocks=${(ev.source_block_ids || []).join(", ")}</div>
       <pre>${ev.text}</pre>
     </div>
   `).join("") || "<p class='small'>无检索证据。</p>";

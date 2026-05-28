@@ -18,12 +18,15 @@ FastAPI Backend
   └─ Validators：识别验证、答案验证、LLM 验证占位、人工验证
 
 Storage
-  ├─ source.pdf
-  ├─ page images
-  ├─ pages.json
-  ├─ chunks.json
-  ├─ meta.json
-  └─ human_reviews.jsonl
+  ├─ raw/source.pdf
+  ├─ images/page-0001.png
+  ├─ manifest.json
+  ├─ pages.jsonl
+  ├─ elements.jsonl
+  ├─ edges.jsonl
+  ├─ blocks.jsonl
+  ├─ chunks.jsonl
+  └─ reviews.jsonl
 ```
 
 ## 2. 为什么采用这个架构
@@ -32,7 +35,8 @@ Storage
 
 - PDF 类型判断独立，方便支持文本层 PDF、扫描件、混合件。
 - OCR 独立，便于从 Tesseract 替换到 PaddleOCR、云 OCR 或版面分析模型。
-- chunker 独立，便于从简单条款切分升级为版面感知切分。
+- 元素图谱独立，便于把 OCR 文本、文本层、图片、表格、表单、批注、链接等统一追溯。
+- chunker 独立，从元素图谱派生的 block 构建检索 chunk。
 - retriever 独立，便于从 TF-IDF 升级为 BM25 + embedding + rerank。
 - QA 独立，便于从抽取式答案升级为 LLM 生成。
 - validators 独立，便于形成可审计的质量门禁。
@@ -42,11 +46,12 @@ Storage
 当前原型采用确定性工具链 + 轻量 RAG：
 
 1. 工具选择：根据 PDF probe 结果选择 OCR 或文本抽取。
-2. 工具执行：渲染页面、OCR、表格候选区检测。
-3. 知识构建：按条款和固定行数分 chunk，并保留页码/行号。
-4. 检索：问题进入 TF-IDF 检索，返回 top-k 证据。
-5. 回答：证据足够则抽取式回答；不足则拒答。
-6. 验证：检索分、答案证据覆盖、无答案保护、LLM 验证占位、人工验证。
+2. 工具执行：渲染页面、OCR、表格候选区检测、文本/图片/矢量/链接等元素抽取。
+3. 元素图谱：写入 `elements.jsonl` 和 `edges.jsonl`，建立包含、渲染、OCR 派生、候选、贡献等硬关系。
+4. 知识构建：从元素图谱派生 block 和 chunk，并保留 source block/type。
+5. 检索：问题进入 TF-IDF 检索，返回 top-k 证据。
+6. 回答：证据足够则抽取式回答；不足则拒答。
+7. 验证：检索分、答案证据覆盖、无答案保护、LLM 验证占位、人工验证。
 
 在生产环境中，可将第 1 步扩展为真正的 Agent Planner：根据文档类型、用户问题和已有结果，动态选择 OCR、表格抽取、检索、重排、LLM 判断、人工队列等工具。
 

@@ -7,7 +7,8 @@
 - OCR 平均置信度：低于阈值时提示人工复核。
 - 文本密度：扫描页如果识别文本过短，说明 OCR 可能失败。
 - 表格区域检测：如果页面包含明显表格线，应能检测到候选区域。
-- 来源定位：每一行 OCR 文本保留 page、line_id、bbox，支持在 Web 页面回看原图。
+- 来源定位：每一行 OCR 文本保存为 `ocr_text` element，保留 page、element_id、bbox，并通过 `ocr_derived_from` edge 指向页面图。
+- 关系完整性：block/chunk 必须通过 `contributes_to_block`、`contributes_to_chunk` edge 反查到原始 element。
 
 ## 2. 检索验证
 
@@ -15,6 +16,7 @@
 
 - 分数低于阈值：进入无答案保护。
 - 证据来自多个页面：前端显示每个 chunk 的页码和片段。
+- 证据保留 `source_block_ids`、`source_types`，支持继续追溯到 `elements.jsonl` 和 `edges.jsonl`。
 - 表格问题：如果证据来自表格候选页，标记为 table 类型或提示人工确认。
 
 ## 3. 答案验证
@@ -59,4 +61,4 @@
 - needs_fix：需要重新 OCR、补充表格解析或调整检索。
 - uncertain：证据不足，需要业务专家确认。
 
-所有记录写入 `human_reviews.jsonl`，便于审计和复盘。
+所有记录写入 `reviews.jsonl`，便于审计和复盘。

@@ -50,6 +50,9 @@ class TfidfRetriever:
                 "score": round(score, 4),
                 "kind": chunk.kind,
                 "text": chunk.text,
-                "line_ids": chunk.line_ids,
+                "source_block_ids": chunk.source_block_ids,
+                "alternative_block_ids": chunk.alternative_block_ids,
+                "source_group_ids": chunk.source_group_ids,
+                "source_types": chunk.source_types,
             })
         return results

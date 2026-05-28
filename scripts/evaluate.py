@@ -29,7 +29,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.sample:
-        pdf_path = PROJECT_ROOT / "data" / "sample" / "GBT 1568-2008 键 技术条件.pdf"
+        pdf_path = PROJECT_ROOT / "docs-for-test" / "sample_scan.pdf"
     elif args.pdf:
         pdf_path = args.pdf
     else:
@@ -41,7 +41,7 @@ def main() -> int:
     chunks = [Chunk(**item) for item in doc["chunks"]]
     retriever = TfidfRetriever(chunks)
 
-    report = {"doc_id": doc_id, "probe": result["meta"]["probe"], "cases": []}
+    report = {"doc_id": doc_id, "probe": result["manifest"]["probe"], "cases": []}
     for case in QUESTIONS:
         evidence = retriever.search(case["question"], top_k=4)
         answer = build_answer(case["question"], evidence)

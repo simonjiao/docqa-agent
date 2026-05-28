@@ -23,7 +23,7 @@ from .core.storage import (
 
 APP_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_ROOT.parent
-SAMPLE_PDF = PROJECT_ROOT / "data" / "sample" / "GBT 1568-2008 键 技术条件.pdf"
+SAMPLE_PDF = PROJECT_ROOT / "docs-for-test" / "sample_scan.pdf"
 
 app = FastAPI(title="智能文档问答 Agent 原型", version="0.1.0")
 app.mount("/static", StaticFiles(directory=APP_ROOT / "web" / "static"), name="static")
@@ -58,7 +58,7 @@ async def upload_pdf(file: UploadFile = File(...)) -> Dict[str, Any]:
     doc_id, pdf_path = save_upload(pdf_bytes, file.filename)
     result = process_pdf(doc_id, pdf_path)
     _RETRIEVERS.pop(doc_id, None)
-    return result["meta"]
+    return result["manifest"]
 
 
 @app.post("/api/load-sample")
@@ -68,7 +68,7 @@ def load_sample() -> Dict[str, Any]:
     doc_id, pdf_path = copy_sample(SAMPLE_PDF)
     result = process_pdf(doc_id, pdf_path)
     _RETRIEVERS.pop(doc_id, None)
-    return result["meta"]
+    return result["manifest"]
 
 
 @app.get("/api/docs/{doc_id}")
@@ -81,7 +81,7 @@ def get_doc(doc_id: str) -> Dict[str, Any]:
 
 @app.get("/api/docs/{doc_id}/pages/{page_no}/image")
 def get_page_image(doc_id: str, page_no: int) -> FileResponse:
-    path = doc_dir(doc_id) / "pages" / f"page-{page_no}.png"
+    path = doc_dir(doc_id) / "images" / f"page-{page_no:04d}.png"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Page image not found.")
     return FileResponse(path, media_type="image/png")
@@ -91,10 +91,43 @@ def get_page_image(doc_id: str, page_no: int) -> FileResponse:
 def get_page_recognition(doc_id: str, page_no: int) -> Dict[str, Any]:
     doc = load_document(doc_id)
     for page in doc["pages"]:
-        if page["page"] == page_no:
+        if page["page_no"] == page_no:
+            lines = [
+                {
+                    "id": element.get("raw_ref", {}).get("ocr_line_id", element["element_id"]),
+                    "element_id": element["element_id"],
+                    "page": page_no,
+                    "text": element.get("text", ""),
+                    "bbox": element.get("bbox") or [0, 0, 0, 0],
+                    "confidence": element.get("confidence") or 0,
+                    "source_type": element.get("source_type"),
+                    "source_group_id": element.get("source_group_id"),
+                }
+                for element in doc["elements"]
+                if element.get("page_no") == page_no and element.get("element_type") == "ocr_text"
+            ]
+            table_regions = [
+                {
+                    "id": element.get("raw_ref", {}).get("table_id", element["element_id"]),
+                    "element_id": element["element_id"],
+                    "bbox": element.get("bbox") or [0, 0, 0, 0],
+                    "reason": element.get("raw_ref", {}).get("reason", "table_detection"),
+                }
+                for element in doc["elements"]
+                if element.get("page_no") == page_no and element.get("element_type") == "table_region"
+            ]
             return {
-                "page": page,
-                "checks": doc["meta"].get("recognition_checks", {}).get(str(page_no), []),
+                "page": {
+                    "page": page_no,
+                    "page_id": page["page_id"],
+                    "image_width": page["width"],
+                    "image_height": page["height"],
+                    "text": "\n".join(line["text"] for line in lines),
+                    "lines": lines,
+                    "table_regions": table_regions,
+                    "average_confidence": page["average_ocr_confidence"],
+                },
+                "checks": page.get("checks", []),
             }
     raise HTTPException(status_code=404, detail="Page recognition not found.")
 
@@ -120,6 +153,13 @@ def ask(doc_id: str, payload: AskRequest) -> Dict[str, Any]:
 def save_review(doc_id: str, payload: ReviewRequest) -> Dict[str, Any]:
     item = payload.model_dump()
     item["created_at_unix"] = int(time.time())
+    item["review_id"] = f"review-{item['created_at_unix']}"
+    item["target_chunk_ids"] = [ev.get("chunk_id") for ev in item.get("evidence", []) if ev.get("chunk_id")]
+    item["target_block_ids"] = [
+        block_id
+        for ev in item.get("evidence", [])
+        for block_id in ev.get("source_block_ids", [])
+    ]
     append_review(doc_id, item)
     return {"ok": True, "item": item}
 

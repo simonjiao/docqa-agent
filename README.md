@@ -68,7 +68,8 @@ app/
   core/
     pdf_probe.py          PDF 类型判断与解析策略选择
     ocr.py                页面渲染、OCR、表格候选区域检测
-    chunker.py            条款/正文分块
+    parser.py             元素图谱、硬关系边、派生产物构建
+    chunker.py            基于 block 的检索 chunk 构建
     retrieval.py          TF-IDF 检索
     qa.py                 抽取式问答与拒答逻辑
     validators.py         文档识别、检索、答案、LLM、人工验证
@@ -81,7 +82,10 @@ docs/
   architecture.md         架构说明
   validation_workflow.md  验证流程说明
   demo_script.md          演示脚本
+  pdf_element_graph_implementation_checklist.md  元素图谱实现清单
   debug_trace.md          调试过程跟踪记录
+docs-for-test/
+  sample_scan.pdf         自动测试和评估使用的 PDF 样本
 scripts/
   evaluate.py             样例问题评估脚本
 tests/
@@ -92,15 +96,15 @@ AGENTS.md                 项目协作规则与调试跟踪要求
 ## 4. 处理流程
 
 1. 上传 PDF。
-2. `pdf_probe` 判断是否有文本层、是否属于扫描件。
-3. 页面渲染为 PNG。
-4. OCR 识别正文、条款编号、数字、英文。
-5. 检测疑似表格区域。
-6. 以页码和行号为粒度构建 chunk。
-7. 根据用户问题检索相关证据。
+2. `pdf_probe` 判断 PDF 类型、文本层、图片、表单、矢量和权限信号。
+3. 渲染页面并执行 OCR。
+4. 将页面、页面图、OCR 文本、表格候选、PDF 文本层、图片、矢量、链接等写入 `elements.jsonl`。
+5. 将包含、渲染、OCR 派生、候选等价、block/chunk 贡献关系写入 `edges.jsonl`。
+6. 从元素图谱派生 `blocks.jsonl` 和 `chunks.jsonl`。
+7. 根据用户问题检索相关 chunk，并保留 source block/type 追溯信息。
 8. 生成答案，返回页码和片段。
 9. 执行自检：证据分数、答案和证据重合度、无答案保护。
-10. 前端支持人工确认、退回或标记不确定，并保存复核记录。
+10. 前端支持人工确认、退回或标记不确定，并保存复核记录到 `reviews.jsonl`。
 
 ## 5. 验证流程
 
@@ -138,6 +142,7 @@ python scripts/evaluate.py --sample
 
 - 为保证可复现，默认不依赖外部 LLM API；答案生成采用抽取式策略。
 - 表格识别实现为“表格区域检测 + OCR 文本”，不是完整单元格结构恢复；这是本原型的主要迭代点。
+- 新存储格式不再把旧 `meta.json`、`pages.json`、`chunks.json` 作为主输出；事实源为 `manifest.json`、`pages.jsonl`、`elements.jsonl`、`edges.jsonl`、`blocks.jsonl`、`chunks.jsonl`。
 - OCR 结果受 Tesseract 语言包、DPI、扫描质量影响；低置信度页面会进入人工复核。默认 `OCR_DPI=120`、`OCR_TIMEOUT=30`，防止扫描噪声导致识别过程长时间阻塞。
 - 轻量检索使用 TF-IDF，适合原型和小规模文档；生产可替换为向量索引、BM25 + embedding 混合检索。
 

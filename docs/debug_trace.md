@@ -305,3 +305,48 @@ zsh:1: unmatched "
 ```
 
 剩余风险：本次仍是设计文档更新，未实现元素图谱、关系边生成器或专项 PDF 样本测试。pytest 警告来自 PyMuPDF/SWIG 相关 DeprecationWarning，未影响现有测试通过。
+
+## 2026-05-28 PDF 元素图谱不兼容实现
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：分阶段但一次性完成元素图谱实现，生成 checklist，不兼容旧格式，测试文件放在 `docs-for-test/`，并及时提交。
+
+处理摘要：
+
+- 新增 `docs/pdf_element_graph_implementation_checklist.md`。
+- 新增 `docs-for-test/`，放入扫描样本和合成的 text/ocr/mixed/form/drawing/protected PDF fixture。
+- 将主输出改为 `manifest.json`、`pages.jsonl`、`elements.jsonl`、`edges.jsonl`、`blocks.jsonl`、`chunks.jsonl`、`reviews.jsonl`。
+- 停止写入旧 `meta.json`、`pages.json`、`chunks.json` 主输出。
+- OCR 行生成 `ocr_text` element，页面图生成 `page_render` element，block/chunk 通过 edge 追溯来源。
+- API 的页面识别视图改为从元素图谱派生。
+
+遇到的问题：
+
+```text
+scripts/evaluate.py --sample 首次运行失败，原因是同 doc_id 下残留旧 storage 缓存，只有旧 meta/pages/chunks，没有新 manifest。
+```
+
+修复：
+
+- `save_upload()` 在同 doc_id 已存在时清理旧目录，避免不兼容格式混用。
+- `pdf_probe` 对 protected PDF 提前返回 `protected_pdf`，避免访问加密页面触发 `document closed or encrypted`。
+- 修正 PyMuPDF `page.widgets()` 判断，避免空 widgets 生成器被误判为 `form_pdf`。
+- 最后一次评估摘要命令使用裸 `python` 失败，改用 `.venv/bin/python`。
+- 并行运行 `pytest` 和 `evaluate.py --sample` 时，测试中的 `clean_storage()` 会清理同一个 `storage/`，导致评估中的页面 PNG 被破坏；最终改为串行验证。
+
+验证命令：
+
+```bash
+.venv/bin/pytest -q
+.venv/bin/python scripts/evaluate.py --sample
+```
+
+结果摘要：
+
+```text
+8 passed, 5 warnings
+evaluate.py --sample completed; sample probe pdf_type=scan_pdf
+```
+
+剩余风险：当前元素图谱已覆盖现有 OCR、文本层、图片对象、矢量路径、链接、表单、批注、附件元数据等基础元素；`ocr_pdf` 和 `form_pdf` 已有合成 fixture，但还没有授权可提交的真实业务样本，也没有完整表格单元格恢复或签名深解析。
