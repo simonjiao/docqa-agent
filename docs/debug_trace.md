@@ -1049,3 +1049,101 @@ passed
 ```
 
 剩余风险：该规则约束 Codex/项目内命令习惯；不修改系统 PATH，也不创建 `python` shim。
+
+## 2026-05-28 14:09:56 CST mini-agent 集成与强制 LLM QA
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：
+
+- 将 `/Users/simon/darkfactory/workmate/vendor/mini-agent` 复制到本项目。
+- 为项目加入 Agent 支持，支持 QA 功能。
+- QA 回答必须以事实为准，由 LLM 组织答复。
+- 不要抽取式回退，必须配置 LLM。
+
+处理：
+
+- 将 mini-agent 源码复制到 `vendor/mini-agent/`，排除 `__pycache__`、`.pyc` 和 egg-info 生成物。
+- 对 vendored `mini_agent.__init__` 和 `mini_agent.llm.__init__` 做懒加载，避免 QA 只使用 OpenAI-compatible 客户端时提前加载 Anthropic/MCP/完整工具链依赖。
+- 对 vendored `mini_agent.llm.llm_wrapper` 做 provider 级懒加载，避免仅导入 Agent/OpenAI 路径时要求 Anthropic SDK。
+- `app/core/qa.py` 改为强制 LLM：
+  - 读取 `DOCQA_LLM_API_KEY`、`DOCQA_LLM_BASE_URL`、`DOCQA_LLM_MODEL`，兼容 `OPENAI_*`。
+  - 未配置时抛出 `LLMConfigurationError`，API 返回 503。
+  - 使用 vendored mini-agent 的 OpenAI-compatible client 组织答案。
+  - 检索证据是唯一事实来源，Prompt 禁止使用证据外事实。
+  - 证据不足时仍调用 LLM，但要求拒答；若 LLM 不拒答，抛出 `LLMGroundingError`，API 返回 502，不生成回退答案。
+- `scripts/evaluate.py` 遇到 LLM 配置或事实约束失败时退出 2。
+- 更新 README、架构说明、验证流程和演示脚本，删除“默认不依赖外部 API/抽取式答案”的旧描述。
+- `requirements.txt` 增加 `openai` 和 `tiktoken`，分别支持 mini-agent OpenAI 客户端和完整 Agent 懒加载后的运行。
+- 新增 `pytest.ini`，限制本项目测试只收集 `tests/`，不收集 vendored mini-agent 自带测试。
+- 将 `/Users/simon/darkfactory/workmate/.env` 中的必要 LLM 配置复制为本项目 `.env` 的 `DOCQA_LLM_BASE_URL`、`DOCQA_LLM_API_KEY`、`DOCQA_LLM_MODEL`，未复制 workmate 的 app secret、adapter、工具开关等无关配置。
+- `run.sh` 启动时自动加载本项目 `.env`，`.env` 继续由 `.gitignore` 排除，不提交密钥。
+- QA 配置加载器也会读取项目根目录 `.env`，便于 `scripts/evaluate.py` 等非 `run.sh` 入口使用同一份本地 LLM 配置。
+- 测试可通过 `DOCQA_DISABLE_DOTENV=1` 禁用自动读取 `.env`，用于验证未配置 LLM 必须失败的路径。
+- 当前 `.venv` 已安装新增依赖 `openai` 和 `tiktoken`。
+- 重启现有 tmux 服务 `docqa_agent_prototype`，复用 8000 端口加载 `.env`。
+
+验证：
+
+```text
+.venv/bin/python -m py_compile app/core/qa.py app/main.py scripts/evaluate.py vendor/mini-agent/mini_agent/__init__.py vendor/mini-agent/mini_agent/llm/__init__.py vendor/mini-agent/mini_agent/llm/llm_wrapper.py
+passed
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q
+26 passed, 5 warnings
+
+node --check app/web/static/app.js
+passed
+
+.venv/bin/python - <<'PY'
+from app.core.qa import LLMConfigurationError, build_answer
+try:
+    build_answer('是否规定电机噪声测试？', [])
+except LLMConfigurationError as exc:
+    print(str(exc))
+PY
+QA 必须配置 LLM，缺少：DOCQA_LLM_API_KEY 或 OPENAI_API_KEY；DOCQA_LLM_BASE_URL 或 OPENAI_BASE_URL；DOCQA_LLM_MODEL 或 OPENAI_MODEL
+
+POST /api/docs/多智能体平台JD-abce43f968ec7210/ask
+HTTP 503
+
+.venv/bin/python - <<'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path('vendor/mini-agent').resolve()))
+from mini_agent import Agent
+from mini_agent.llm import LLMClient
+from mini_agent.llm.openai_client import OpenAIClient
+from mini_agent.schema import Message
+print(Agent.__name__, LLMClient.__name__, OpenAIClient.__name__, Message(role='user', content='ok').content)
+PY
+Agent LLMClient OpenAIClient ok
+
+GET /
+HTTP 200
+
+POST /api/docs/多智能体平台JD-abce43f968ec7210/ask
+HTTP 200
+mode=llm_grounded
+llm_judge=pass
+model=MiniMax-M2.7
+internal chunk references in answer=false
+
+set -a; source .env; set +a; STORAGE_DIR=$(mktemp -d) .venv/bin/python scripts/evaluate.py --sample
+cases=5
+llm_judge=pass for q1_scope, q2_strength, q3_table, q4_mark, q5_no_answer
+internal chunk references in answers=false
+```
+
+遇到的问题：
+
+- 首次全量 pytest 自动收集了 `vendor/mini-agent/tests/`，由于 vendored 项目完整测试需要 `anthropic`、`mcp`、`agent-client-protocol` 等依赖，收集阶段失败。
+- 处理方式：本项目将 mini-agent 作为 vendored 运行依赖，不把其上游测试纳入本项目测试范围；新增 `pytest.ini` 限定 `testpaths=tests`。
+- 首次导入 `mini_agent.Agent` 仍因 `llm_wrapper.py` 顶层导入 AnthropicClient 失败；已改成 provider 分支内懒加载，OpenAI 路径和 Agent 导入通过。
+- 第一次真实 LLM 评估中，同步 `build_answer()` 每题创建 async client 后出现 `RuntimeError('Event loop is closed')` 的后台清理告警；已给 `MiniAgentOpenAICompletionClient` 增加 `aclose()`，同步包装器在自有 client 场景下显式关闭底层 AsyncOpenAI client。
+- 真实 LLM 评估时发现 prompt 中包含 chunk id 后，模型可能把内部 id 写入答案；已从 LLM prompt 的证据块中移除 chunk id、kind、score，只保留证据序号、页码和文本。
+- 一次 shell 后处理命令使用变量名 `status`，在 zsh 中触发 `read-only variable: status`；改用不冲突变量或直接读取评估产物。
+- `git diff --cached --check` 发现 vendored mini-agent 上游文本文件有尾随空白和多余 EOF 空行；对 vendored 文本文件做了机械空白清理，未处理二进制资源。
+- 编译和导入检查会生成 `__pycache__`，提交前已从 `vendor/mini-agent` 清理。
+
+剩余风险：真实 LLM 已通过 `/ask` smoke 和 5 个样例问题评估；后续仍需按真实业务 PDF 继续扩展 golden set。

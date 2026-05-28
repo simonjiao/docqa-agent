@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ -f ".env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source ".env"
+  set +a
+fi
 export OCR_LANG=${OCR_LANG:-chi_sim+eng}
 export STORAGE_DIR=${STORAGE_DIR:-./storage}
 if [[ -x ".venv/bin/uvicorn" ]]; then

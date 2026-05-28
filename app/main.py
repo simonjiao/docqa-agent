@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .core.parser import process_pdf
-from .core.qa import build_answer
+from .core.qa import LLMConfigurationError, LLMGroundingError, build_answer_async
 from .core.retrieval import TfidfRetriever
 from .core.schemas import Chunk
 from .core.storage import (
@@ -247,10 +247,15 @@ def _get_retriever(doc_id: str) -> TfidfRetriever:
 
 
 @app.post("/api/docs/{doc_id}/ask")
-def ask(doc_id: str, payload: AskRequest) -> Dict[str, Any]:
+async def ask(doc_id: str, payload: AskRequest) -> Dict[str, Any]:
     retriever = _get_retriever(doc_id)
     evidence = retriever.search(payload.question, top_k=payload.top_k)
-    result = build_answer(payload.question, evidence)
+    try:
+        result = await build_answer_async(payload.question, evidence)
+    except LLMConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except LLMGroundingError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     result["question"] = payload.question
     return result
 

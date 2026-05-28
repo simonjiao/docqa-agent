@@ -9,7 +9,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.core.parser import process_pdf
 from app.core.retrieval import TfidfRetriever
-from app.core.qa import build_answer
+from app.core.qa import LLMConfigurationError, LLMGroundingError, build_answer
 from app.core.schemas import Chunk
 from app.core.storage import copy_sample, load_document
 
@@ -44,7 +44,11 @@ def main() -> int:
     report = {"doc_id": doc_id, "probe": result["manifest"]["probe"], "cases": []}
     for case in QUESTIONS:
         evidence = retriever.search(case["question"], top_k=4)
-        answer = build_answer(case["question"], evidence)
+        try:
+            answer = build_answer(case["question"], evidence)
+        except (LLMConfigurationError, LLMGroundingError) as exc:
+            print(f"QA failed: {exc}", file=sys.stderr)
+            return 2
         report["cases"].append({
             **case,
             "answer": answer["answer"],

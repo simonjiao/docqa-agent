@@ -27,31 +27,26 @@
 - evidence_score：最高检索分是否达到阈值。
 - answer_evidence_overlap：答案字符是否主要来自证据。
 - no_answer_guard：证据不足时是否拒答。
-- llm_judge：默认未配置，但保留阶段用于接入大模型判断。
+- llm_judge：QA 必须配置 LLM；该检查记录 mini-agent LLM 是否已按检索证据组织答复。
 - human_review：人工复核状态，默认 pending。
 
-## 4. LLM 验证的接入方案
+## 4. LLM 事实约束方案
 
-当前原型默认不依赖外部 API。实际项目中建议 LLM 验证 prompt 只做裁判，不重新发挥：
+当前 QA 不提供抽取式回退。`/ask` 必须配置 OpenAI-compatible LLM，并通过 `vendor/mini-agent` 组织最终答复；检索证据是唯一事实来源。
 
-输入：问题、答案、证据片段、页码、OCR 置信度、是否表格问题。
+必须配置以下环境变量，或使用同名 `OPENAI_*` 变量：
 
-输出 JSON：
-
-```json
-{
-  "supported": true,
-  "needs_refusal": false,
-  "missing_evidence": false,
-  "table_risk": "low|medium|high",
-  "reason": "..."
-}
+```bash
+export DOCQA_LLM_BASE_URL=http://127.0.0.1:8080/v1
+export DOCQA_LLM_API_KEY=your-api-key
+export DOCQA_LLM_MODEL=your-model
 ```
 
 规则：
 
 - LLM 不能补充证据中不存在的事实。
-- LLM 判断为 unsupported 时，答案不能直接返回给用户。
+- 检索分低或关键业务词没有被证据覆盖时，仍调用 LLM，但 Prompt 明确要求“证据不足”拒答。
+- 如果证据不足场景下 LLM 没有拒答，后端返回事实约束失败，不生成回退答案。
 - 表格风险高时必须进入人工复核或表格专用解析。
 
 ## 5. 人工验证

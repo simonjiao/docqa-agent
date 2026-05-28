@@ -60,7 +60,7 @@ def answer_self_checks(question: str, answer: str, evidence: List[Dict], min_sco
             "stage": "llm_validation",
             "name": "llm_judge",
             "status": "not_configured",
-            "detail": "可接入大模型二次判断：证据是否支持答案、是否遗漏表格、是否应拒答。本原型默认不开启外部 API。",
+            "detail": "QA 必须配置 LLM；build_answer 会将该检查更新为实际模型组织答复结果。",
         },
         {
             "stage": "human_validation",

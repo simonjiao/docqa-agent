@@ -8,9 +8,9 @@
 - PDF 策略判断：自动识别文本层 PDF、扫描 PDF、混合 PDF，并选择解析策略。
 - OCR 识别：默认使用 Tesseract，语言为 `chi_sim+eng`，适配中文扫描件与英文/数字混排。
 - 表格候选区：基于页面横竖线检测表格区域，供后续表格 OCR 与人工复核。
-- RAG 检索：使用 TF-IDF 字符 n-gram 建立轻量索引，不依赖外部 API。
-- 问答输出：默认采用抽取式答案，返回来源页码和片段；证据不足时拒答。
-- 多流程验证：包括文档识别验证、检索验证、答案依据验证、LLM 验证占位、人工验证记录。
+- RAG 检索：使用 TF-IDF 字符 n-gram 建立轻量索引，检索结果作为 QA 事实来源。
+- 问答输出：集成 `vendor/mini-agent`，必须配置 OpenAI-compatible LLM，由 LLM 只基于检索证据组织答复；证据不足时拒答。
+- 多流程验证：包括文档识别验证、检索验证、答案依据验证、LLM 事实约束、人工验证记录。
 - 可复现测试：提供单元测试和评估脚本，覆盖正文、表格、无答案问题。
 
 ## 2. 快速启动
@@ -48,6 +48,18 @@ pip install -r requirements.txt
 
 ### 2.3 启动 Web 原型
 
+QA 功能必须配置 LLM；未配置时 `/ask` 接口会返回 503，不会回退到抽取式答案。
+
+```bash
+export DOCQA_LLM_BASE_URL=http://127.0.0.1:8080/v1
+export DOCQA_LLM_API_KEY=your-api-key
+export DOCQA_LLM_MODEL=your-model
+```
+
+也兼容 `OPENAI_BASE_URL`、`OPENAI_API_KEY`、`OPENAI_MODEL`。
+
+项目根目录 `.env` 会被 `run.sh` 和 QA 配置加载器读取；`.env` 不应提交。
+
 ```bash
 ./run.sh
 ```
@@ -71,7 +83,7 @@ app/
     parser.py             元素图谱、硬关系边、派生产物构建
     chunker.py            基于 block 的检索 chunk 构建
     retrieval.py          TF-IDF 检索
-    qa.py                 抽取式问答与拒答逻辑
+    qa.py                 mini-agent LLM 事实约束问答与拒答逻辑
     validators.py         文档识别、检索、答案、LLM、人工验证
     storage.py            文档、识别结果、复核记录持久化
   web/
@@ -90,6 +102,8 @@ scripts/
   evaluate.py             样例问题评估脚本
 tests/
   pytest 单元测试
+vendor/
+  mini-agent/             本项目内置 Agent/LLM 客户端支持
 AGENTS.md                 项目协作规则与调试跟踪要求
 ```
 
@@ -102,8 +116,8 @@ AGENTS.md                 项目协作规则与调试跟踪要求
 5. 将包含、渲染、OCR 派生、候选等价、主备选择、block/chunk 贡献关系写入 `edges.jsonl`。
 6. 从元素图谱派生 `blocks.jsonl` 和 `chunks.jsonl`；未匹配文本层的图片 OCR 文本进入主 chunk，同区域未采用候选保留为 alternative block。
 7. 根据用户问题检索相关 chunk，并保留 source block/type 追溯信息。
-8. 生成答案，返回页码和片段。
-9. 执行自检：证据分数、答案和证据重合度、无答案保护。
+8. 将检索证据交给 vendored mini-agent 的 OpenAI-compatible LLM 客户端组织答案；Prompt 明确禁止使用证据外事实。
+9. 执行自检：证据分数、答案和证据重合度、无答案保护、LLM 事实约束。
 10. 前端支持人工确认、退回或标记不确定，并保存复核记录到 `reviews.jsonl`，同时追加 `review` element 和 `review_of` edge。
 
 ## 5. 验证流程
@@ -111,7 +125,7 @@ AGENTS.md                 项目协作规则与调试跟踪要求
 原型集成了三层验证：
 
 - 文档识别过程验证：OCR 平均置信度、文本密度、表格候选区域。
-- LLM/答案验证：默认不开启外部模型，但保留 `llm_validation` 阶段；实际项目中可接入模型判断“证据是否支持答案、是否需要拒答、表格是否遗漏”。
+- LLM/答案验证：QA 必须配置 LLM；`llm_validation` 会记录实际模型已基于检索证据组织答复。未配置时接口失败，不生成回退答案。
 - 人工验证：Web 页面中可对答案做通过、退回修正、不确定记录，形成审计轨迹。
 
 ## 6. 示例问题
@@ -132,7 +146,7 @@ AGENTS.md                 项目协作规则与调试跟踪要求
 .venv/bin/pytest -q
 ```
 
-运行评估脚本：
+运行评估脚本需要先配置 LLM；如果项目根目录已有 `.env`，脚本会自动读取：
 
 ```bash
 .venv/bin/python scripts/evaluate.py --sample
@@ -140,7 +154,7 @@ AGENTS.md                 项目协作规则与调试跟踪要求
 
 ## 8. 当前取舍与限制
 
-- 为保证可复现，默认不依赖外部 LLM API；答案生成采用抽取式策略。
+- QA 不提供抽取式回退；必须配置 OpenAI-compatible LLM。检索结果仍是唯一事实来源，LLM 只负责组织答复。
 - 表格识别实现为“表格区域检测 + OCR 文本”，不是完整单元格结构恢复；这是本原型的主要迭代点。
 - 新存储格式不再把旧 `meta.json`、`pages.json`、`chunks.json` 作为主输出；事实源为 `manifest.json`、`pages.jsonl`、`elements.jsonl`、`edges.jsonl`、`blocks.jsonl`、`chunks.jsonl`。
 - OCR 结果受 Tesseract 语言包、DPI、扫描质量影响；低置信度页面会进入人工复核。默认 `OCR_DPI=120`、`OCR_TIMEOUT=30`，防止扫描噪声导致识别过程长时间阻塞。
