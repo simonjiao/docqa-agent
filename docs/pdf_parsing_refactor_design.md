@@ -731,6 +731,7 @@ upload PDF
 
 - 表格候选区域进入 elements、edges 和 blocks。
 - 增加 table structure artifact，例如 `tables.jsonl`。
+- 结构化表格识别按 `docs/table_structure_recognition_design.md` 执行；`elements.jsonl` 和 `edges.jsonl` 仍是事实源，`tables.jsonl` 只是派生视图。
 - LLM 验证时显式提示表格风险。
 - 对双栏、页眉页脚、水印、印章等做 element/block 级规则。
 - 无法恢复单元格结构时，仍必须记录 `table_region`、线条、OCR 文本和 `needs_specialized_parser`，不能只保存普通文本。

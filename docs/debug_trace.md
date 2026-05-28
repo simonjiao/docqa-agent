@@ -623,3 +623,19 @@ image_ocr alternative blocks 对表格区域识别质量较差，例如 "asf ww 
 修复或 workaround：本次只做检查，未改代码。若后续要让问答可靠使用表格，应增加专门的表格结构解析，至少把 `样本名/评级/编码/检测结果/结果解释` 恢复为行列单元格。
 
 验证结果：本地 API 返回 HTTP 200，识别视图与落盘 `elements.jsonl`、`blocks.jsonl`、`chunks.jsonl` 一致。
+
+## 2026-05-28 12:33:42 CST 结构化表格识别设计要求
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：将提升结构化表格识别的方案做成设计文档，目标必须处理有线表格、无线或弱线表格、扫描或 OCR 低质量表格三种复杂情况；随后明确要求不能与既有设计冲突，不能折中。
+
+处理摘要：
+
+- 新增 `docs/table_structure_recognition_design.md`，作为 `docs/pdf_parsing_refactor_design.md` 阶段 5 的深化设计。
+- 明确 `elements.jsonl` 和 `edges.jsonl` 仍是事实源，`tables.jsonl` 只是可重新派生的视图。
+- 明确 `table_region` 只是入口，不是成功状态；最终必须生成 row/column/cell 结构，或明确 `failed` / `needs_review` 并阻断其作为确定答案。
+- 设计覆盖三类解析策略：有线表格 grid parser、无线表格 alignment parser、扫描低质量表格 cell-level OCR parser。
+- 同步更新 `docs/architecture.md` 和 `docs/pdf_parsing_refactor_design.md` 的交叉引用，避免形成另一套路线。
+
+验证结果：`rg` 检查关键术语和交叉引用命中预期，`git diff --check` 通过；本次是文档设计变更，不涉及运行时代码。

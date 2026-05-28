@@ -60,7 +60,7 @@ Storage
 - 扫描件无文本层：走 OCR。
 - OCR 置信度低：标记 warn，进入人工复核。
 - OCR PDF 图片文字：文本层和 OCR 同区域时用 `text_candidate_for`、`equivalent_to`/`conflicts_with`、`chosen_over` 关联；未采用候选通过 `alternative_for_chunk` 保留。
-- 表格问题：优先提示表格候选区域，后续可接入结构化表格抽取。
+- 表格问题：`table_region` 只作为入口，结构化表格抽取按 `docs/table_structure_recognition_design.md` 执行，最终必须进入元素图谱、table block 和 `kind=table` chunk。
 - 无答案问题：检索分低于阈值时拒答。
 - 模糊问题：返回证据和自检状态，不假装确定。
 - 回归风险：评估脚本固定样例问题，后续可加入 golden set。
