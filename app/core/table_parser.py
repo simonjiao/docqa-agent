@@ -211,10 +211,13 @@ def parse_tables(
 
         cell_ids: List[str] = []
         cell_text_rows: List[List[str]] = []
+        cell_id_rows: List[List[str]] = []
         cell_warnings: List[str] = []
         cell_confidences: List[float] = []
+        column_count = max(1, len(grid.column_bboxes))
         for row_index, row_cells in enumerate(grid.cells):
-            text_row: List[str] = []
+            text_row: List[str] = [""] * column_count
+            cell_id_row: List[str] = [""] * column_count
             row_assignments = _assign_candidates_to_cells(row_cells, assignment_candidates)
             for column_index, cell_info in enumerate(row_cells):
                 cell_bbox = _cell_bbox(cell_info)
@@ -255,7 +258,13 @@ def parse_tables(
                 )
                 result.elements.append(cell)
                 cell_ids.append(cell_id)
-                text_row.append(final_text)
+                global_column_index = int(cell_info.get("column_index", column_index))
+                if 0 <= global_column_index < column_count:
+                    text_row[global_column_index] = final_text
+                    cell_id_row[global_column_index] = cell_id
+                else:
+                    text_row.append(final_text)
+                    cell_id_row.append(cell_id)
                 cell_warnings.extend(warnings)
                 cell_confidences.append(cell_text.confidence)
                 add_edge(structure_id, cell_id, "contains", "table_parser.v1.structure_contains_cell", {"table_id": table_id})
@@ -292,6 +301,7 @@ def parse_tables(
                     add_edge(cell_id, ocr_element_id, "ocr_derived_from", "table_parser.v1.cell_ocr", {"table_id": table_id, "bbox": cell_bbox}, confidence=max(0.0, min(1.0, cell_text.confidence / 100)))
                     add_edge(ocr_element_id, cell_id, "text_candidate_for", "table_parser.v1.cell_ocr_candidate", {"table_id": table_id, "cell_id": cell_id})
             cell_text_rows.append(text_row)
+            cell_id_rows.append(cell_id_row)
 
         table = _table_artifact(
             table_id=table_id,
@@ -304,6 +314,7 @@ def parse_tables(
             bbox=bbox,
             rows=cell_text_rows,
             cell_ids=cell_ids,
+            cell_id_rows=cell_id_rows,
             base_confidence=grid.confidence,
             cell_confidences=cell_confidences,
             warnings=sorted(set(grid.warnings + cell_warnings + (["needs_review", "scanned_table_needs_review"] if strategy == "scanned_ocr_table" else []))),
@@ -341,12 +352,12 @@ def _parse_ruled_grid(image: Image.Image, bbox: List[int]) -> Optional[_GridResu
         return None
     binary = cv2.adaptiveThreshold(arr, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 35, 15)
     horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(18, w // 10), 1))
-    vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(18, h // 8)))
+    vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(15, h // 15)))
     horizontal = cv2.morphologyEx(binary, cv2.MORPH_OPEN, horizontal_kernel, iterations=1)
     vertical = cv2.morphologyEx(binary, cv2.MORPH_OPEN, vertical_kernel, iterations=1)
 
     ys, horizontal_lines = _line_positions(horizontal, "horizontal", bbox)
-    xs, vertical_lines = _line_positions(vertical, "vertical", bbox)
+    xs, vertical_lines = _line_positions(vertical, "vertical", bbox, min_ratio=0.05, min_pixels=14)
     if len(horizontal_lines) < 2 or len(vertical_lines) < 2:
         return None
     xs = _merge_positions([0, w] + [pos - x for pos in xs], tolerance=8)
@@ -454,7 +465,7 @@ def _parse_borderless_grid(region_bbox: List[int], candidates: List[ElementArtif
     )
 
 
-def _line_positions(mask: Any, orientation: str, table_bbox: List[int]) -> Tuple[List[int], List[List[int]]]:
+def _line_positions(mask: Any, orientation: str, table_bbox: List[int], *, min_ratio: float = 0.25, min_pixels: int = 18) -> Tuple[List[int], List[List[int]]]:
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)  # type: ignore[union-attr]
     tx, ty, tw, th = table_bbox
     positions: List[int] = []
@@ -462,11 +473,11 @@ def _line_positions(mask: Any, orientation: str, table_bbox: List[int]) -> Tuple
     for contour in contours:
         x, y, w, h = cv2.boundingRect(contour)  # type: ignore[union-attr]
         if orientation == "horizontal":
-            if w < tw * 0.25:
+            if w < max(min_pixels, tw * min_ratio):
                 continue
             positions.append(ty + y + h // 2)
         else:
-            if h < th * 0.25:
+            if h < max(min_pixels, th * min_ratio) or w > 8:
                 continue
             positions.append(tx + x + w // 2)
         bboxes.append([tx + int(x), ty + int(y), int(w), int(h)])
@@ -482,7 +493,8 @@ def _vertical_boundary_present(abs_x: int, row_top: int, row_bottom: int, vertic
         if abs(line_center - abs_x) > max(6, line[2] + 3):
             continue
         overlap = _axis_overlap(row_top, row_bottom, line[1], line[1] + line[3])
-        if overlap / row_height >= 0.45:
+        touches_row_edges = line[1] <= row_top + 5 and line[1] + line[3] >= row_bottom - 5
+        if overlap / row_height >= 0.65 and touches_row_edges:
             return True
     return False
 
@@ -536,14 +548,30 @@ def _cell_bbox(cell: Dict[str, Any] | List[int]) -> List[int]:
 
 
 def _ocr_cell(image: Image.Image, bbox: List[int]) -> Tuple[str, float]:
+    variants = [
+        _ocr_cell_variant(image, bbox, inset=2, scale=2, psm=6),
+        _ocr_cell_variant(image, bbox, inset=4, scale=1, psm=6),
+        _ocr_cell_variant(image, bbox, inset=2, scale=3, psm=11),
+        _ocr_cell_variant(image, bbox, inset=2, scale=2, psm=6, remove_lines=True),
+    ]
+    best = max(variants, key=lambda item: _cell_ocr_score(item[0], item[1]))
+    return best
+
+
+def _ocr_cell_variant(image: Image.Image, bbox: List[int], *, inset: int, scale: int, psm: int, remove_lines: bool = False) -> Tuple[str, float]:
     x, y, w, h = bbox
-    pad = 3
-    crop = image.crop((max(0, x - pad), max(0, y - pad), x + w + pad, y + h + pad))
+    if w <= inset * 2 or h <= inset * 2:
+        return "", 0.0
+    crop = image.crop((x + inset, y + inset, x + w - inset, y + h - inset)).convert("L")
+    if remove_lines:
+        crop = _remove_cell_ruling_lines(crop)
+    if scale > 1:
+        crop = crop.resize((crop.width * scale, crop.height * scale), Image.Resampling.LANCZOS)
     try:
         data = pytesseract.image_to_data(
             crop,
             lang=resolve_ocr_lang(),
-            config="--psm 6",
+            config=f"--psm {psm}",
             output_type=pytesseract.Output.DICT,
             timeout=DEFAULT_TIMEOUT,
         )
@@ -561,7 +589,66 @@ def _ocr_cell(image: Image.Image, bbox: List[int]) -> Tuple[str, float]:
             continue
         texts.append(cleaned)
         confidences.append(confidence)
-    return " ".join(texts).strip(), round(sum(confidences) / max(1, len(confidences)), 2) if confidences else 0.0
+    raw_text = " ".join(texts).strip()
+    confidence = round(sum(confidences) / max(1, len(confidences)), 2) if confidences else 0.0
+    cleaned_text = _clean_cell_ocr_text(raw_text)
+    if cleaned_text in {"一"} and confidence < 70:
+        return "", 0.0
+    return cleaned_text, confidence
+
+
+def _remove_cell_ruling_lines(crop: Image.Image) -> Image.Image:
+    if cv2 is None:
+        return crop
+    arr = np.array(crop)
+    if arr.size == 0:
+        return crop
+    binary = cv2.adaptiveThreshold(arr, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 35, 15)
+    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(16, crop.width // 2), 1))
+    vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(12, crop.height - 4)))
+    horizontal = cv2.morphologyEx(binary, cv2.MORPH_OPEN, horizontal_kernel, iterations=1)
+    vertical = cv2.morphologyEx(binary, cv2.MORPH_OPEN, vertical_kernel, iterations=1)
+    lines = cv2.bitwise_or(horizontal, vertical)
+    cleaned = arr.copy()
+    cleaned[lines > 0] = 255
+    return Image.fromarray(cleaned)
+
+
+def _clean_cell_ocr_text(text: str) -> str:
+    cleaned = re.sub(r"\s+", " ", text).strip()
+    if not cleaned:
+        return ""
+    cleaned = re.sub(r"[|]+", " ", cleaned)
+    cleaned = re.sub(r"(?<![\dA-Za-z])={1,3}(?![\dA-Za-z])", " ", cleaned)
+    cleaned = re.sub(r"(?<![\dA-Za-z])[-_]{2,}(?![\dA-Za-z])", "—", cleaned)
+    cleaned = re.sub(r"[“”\"`]+", "", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" ;,，。:：")
+    if re.fullmatch(r"[A-Za-z\s]+", cleaned):
+        return ""
+    if re.fullmatch(r"[A-Za-z]\s*[\u3400-\u9fff]{1,2}", cleaned):
+        return ""
+    if not re.search(r"[\u3400-\u9fffA-Za-z0-9—.]", cleaned):
+        return ""
+    return cleaned
+
+
+def _cell_ocr_score(text: str, confidence: float) -> float:
+    if not text:
+        return -100.0
+    if re.fullmatch(r"[A-Za-z\s]+", text):
+        return -100.0
+    score = confidence
+    if re.search(r"[\u3400-\u9fff]", text):
+        score += 12.0
+    if re.search(r"\d", text):
+        score += 8.0
+    if re.search(r"[|=]", text):
+        score -= 25.0
+    if re.fullmatch(r"[A-Za-z]{1,3}", text):
+        score -= 15.0
+    if len(text) <= 2 and not re.search(r"[\d\u3400-\u9fff]", text):
+        score -= 20.0
+    return score
 
 
 def _table_artifact(
@@ -576,6 +663,7 @@ def _table_artifact(
     bbox: List[int],
     rows: List[List[str]],
     cell_ids: List[str],
+    cell_id_rows: List[List[str]] | None = None,
     base_confidence: float,
     cell_confidences: List[float],
     warnings: List[str],
@@ -586,8 +674,11 @@ def _table_artifact(
     columns = max([len(row) for row in rows] or [0])
     cell_index = 0
     for row_index, row in enumerate(rows):
-        row_cell_ids = cell_ids[cell_index : cell_index + len(row)]
-        cell_index += len(row)
+        if cell_id_rows and row_index < len(cell_id_rows):
+            row_cell_ids = cell_id_rows[row_index]
+        else:
+            row_cell_ids = cell_ids[cell_index : cell_index + len(row)]
+            cell_index += len(row)
         if row_index <= header_index:
             continue
         values: Dict[str, str] = {}

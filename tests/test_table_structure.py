@@ -3,7 +3,7 @@ from pathlib import Path
 from app.core.parser import _usable_ocr_elements, process_pdf
 from app.core.schemas import ElementArtifact
 from app.core.storage import clean_storage, copy_sample, doc_dir, load_document
-from app.core.table_parser import _borderless_layout
+from app.core.table_parser import _borderless_layout, _cell_ocr_score, _clean_cell_ocr_text
 from app.main import ReviewRequest, get_table, list_doc_tables, list_page_tables, save_review
 
 
@@ -187,6 +187,13 @@ def test_numbered_notes_are_not_inferred_as_borderless_table():
         for item in doc["elements"]
     )
     _assert_edge_integrity(doc)
+
+
+def test_scanned_cell_ocr_cleanup_removes_ruling_noise_and_latin_junk():
+    assert _clean_cell_ocr_text("| 普通 | 导向 | 薄型 |") == "普通 导向 薄型"
+    assert _clean_cell_ocr_text("| =- |") == ""
+    assert _clean_cell_ocr_text("abe On ea") == ""
+    assert _cell_ocr_score("键 宽 6", 45) > _cell_ocr_score("BE b", 70)
 
 
 def test_chart_image_rulings_are_not_promoted_to_table():
