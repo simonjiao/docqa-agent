@@ -745,3 +745,53 @@ column_count = 14
 - 当前质量门禁虽然给出 `table_text_assignment=warn` 和 `table_header_quality=warn`，但没有把这类高空单元格、列表型文本、伪表头的候选降级或拒绝，最终状态仍为 `pass`。
 
 当前结论：这是无框表格检测阈值过宽造成的 false positive；应增加无框表格的负样本门禁，例如列表密度、伪表头比例、空单元格率、全文段落连续性、列稳定性和候选区域覆盖范围约束。
+
+## 2026-05-28 13:22:11 CST 无框表格误判修复与当前文档恢复
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：修复第 2 页说明文字被识别为表格的问题。
+
+修复：
+
+- `table_parser` 新增无框表格布局门禁：对齐列必须在页面行中有足够高的支持比例，且多数行要稳定命中同一组列。
+- 增加列表/段落型负样本过滤：当首列是 `1.`、`a.` 这类列表标记，且伴随长段落或过多伪列时，不再生成 `text_alignment` 表格候选。
+- 新增 `docs-for-test/sample_text_numbered_notes.pdf`，覆盖“编号说明文字 + 重复缩进”不是无框表格的回归测试。
+
+调试过程中的环境恢复：
+
+- 排查时误用测试 helper，触发默认 `storage` 清理；随后定位到源文件 `/Users/simon/ai-agents/docs-for-test/20251229陈海平.pdf`。
+- 删除误生成的默认存储样本目录 `storage/sample_table_borderless-7abf4319b87a171d`。
+- 使用源文件重新写入并解析默认存储，恢复文档 `20251229陈海平-e23bf7f4264dfe2c`。
+
+验证结果：
+
+```text
+.venv/bin/python -m py_compile app/core/table_parser.py
+passed
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q tests/test_table_structure.py
+5 passed, 5 warnings
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q
+21 passed, 5 warnings
+
+node --check app/web/static/app.js
+passed
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/python scripts/evaluate.py --sample
+5 cases completed with validation checks
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/python - <<'PY'
+# parse /Users/simon/ai-agents/docs-for-test/20251229陈海平.pdf
+# doc_id 20251229陈海平-e23bf7f4264dfe2c
+# total_tables 3
+# page2_tables 0
+PY
+
+curl -sS http://127.0.0.1:8000/api/docs/20251229陈海平-e23bf7f4264dfe2c/pages/2/recognition
+# page.table_regions = []
+# page.tables = []
+```
+
+剩余风险：无框表格检测现在更保守；真实无框表格仍由 `sample_table_borderless.pdf` 回归覆盖，但后续需要继续扩充真实无框财报/检验报告样本，防止过严门禁漏掉特殊布局。

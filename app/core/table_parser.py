@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import json
+import math
+import re
 
 import numpy as np
 from PIL import Image
@@ -35,6 +37,14 @@ class _GridResult:
     line_bboxes: List[List[int]]
     confidence: float
     warnings: List[str]
+
+
+@dataclass
+class _BorderlessLayout:
+    rows: List[List["ElementArtifact"]]
+    column_centers: List[int]
+    row_bboxes: List[List[int]]
+    diagnostics: Dict[str, Any]
 
 
 @dataclass
@@ -392,13 +402,11 @@ def _parse_ruled_grid(image: Image.Image, bbox: List[int]) -> Optional[_GridResu
 
 
 def _parse_borderless_grid(region_bbox: List[int], candidates: List[ElementArtifact]) -> Optional[_GridResult]:
-    rows = _group_elements_by_row(candidates)
-    rows = [row for row in rows if len(row) >= 2]
-    if len(rows) < 2:
+    layout = _borderless_layout(candidates)
+    if layout is None:
         return None
-    column_centers = _aligned_column_centers(rows, tolerance=28, min_rows=2)
-    if len(column_centers) < 2:
-        return None
+    rows = layout.rows
+    column_centers = layout.column_centers
     x, y, w, h = region_bbox
     boundaries = [x]
     for left, right in zip(column_centers, column_centers[1:]):
@@ -408,7 +416,7 @@ def _parse_borderless_grid(region_bbox: List[int], candidates: List[ElementArtif
     if len(boundaries) < 3:
         return None
 
-    row_bboxes = [_union_bbox([item.bbox or [0, 0, 0, 0] for item in row]) for row in rows]
+    row_bboxes = layout.row_bboxes
     row_tops = [bbox[1] for bbox in row_bboxes]
     row_bottoms = [bbox[1] + bbox[3] for bbox in row_bboxes]
     y_boundaries = [max(y, row_tops[0] - 6)]
@@ -763,12 +771,10 @@ def _infer_borderless_region(
     candidates: List[ElementArtifact],
     next_element_id: Any,
 ) -> Optional[ElementArtifact]:
-    rows = [row for row in _group_elements_by_row(candidates) if len(row) >= 2]
-    if len(rows) < 2:
+    layout = _borderless_layout(candidates)
+    if layout is None:
         return None
-    if len(_aligned_column_centers(rows, tolerance=28, min_rows=2)) < 2:
-        return None
-    bboxes = [item.bbox or [0, 0, 0, 0] for row in rows for item in row]
+    bboxes = [item.bbox or [0, 0, 0, 0] for row in layout.rows for item in row]
     bbox = _pad_bbox(_union_bbox(bboxes), 8)
     return ElementArtifact(
         element_id=next_element_id(),
@@ -778,10 +784,85 @@ def _infer_borderless_region(
         page_id=page_id,
         page_no=page_no,
         bbox=bbox,
-        raw_ref={"table_id": f"{page_id}-alignment-region", "reason": "text_alignment"},
+        raw_ref={
+            "table_id": f"{page_id}-alignment-region",
+            "reason": "text_alignment",
+            "diagnostics": layout.diagnostics,
+        },
         extractor={"name": "table_parser.v1.borderless_region"},
         quality={"status": "info", "signals": ["borderless_table_candidate"]},
     )
+
+
+def _borderless_layout(candidates: List[ElementArtifact]) -> Optional[_BorderlessLayout]:
+    rows = [row for row in _group_elements_by_row(candidates) if len(row) >= 2]
+    if len(rows) < 2:
+        return None
+
+    tolerance = 28
+    min_aligned_rows = max(2, math.ceil(len(rows) * 0.6))
+    column_centers = _aligned_column_centers(rows, tolerance=tolerance, min_rows=min_aligned_rows)
+    if len(column_centers) < 2:
+        return None
+
+    row_hit_counts = [_aligned_hit_count(row, column_centers, tolerance=tolerance) for row in rows]
+    min_hits_for_coverage = min(2, len(column_centers))
+    covered_rows = sum(1 for count in row_hit_counts if count >= min_hits_for_coverage)
+    min_covered_rows = max(2, math.ceil(len(rows) * 0.6))
+    if covered_rows < min_covered_rows:
+        return None
+
+    complete_threshold = max(2, min(len(column_centers), math.ceil(len(column_centers) * 0.75)))
+    complete_rows = sum(1 for count in row_hit_counts if count >= complete_threshold)
+    if complete_rows < max(2, math.ceil(len(rows) * 0.5)):
+        return None
+
+    row_bboxes = [_union_bbox([item.bbox or [0, 0, 0, 0] for item in row]) for row in rows]
+    region_bbox = _union_bbox(row_bboxes)
+    region_width = max(1, region_bbox[2])
+    first_cells = [row[0].text.strip() for row in rows if row]
+    list_like_ratio = sum(1 for text in first_cells if _is_list_marker(text)) / max(1, len(first_cells))
+    first_row_starts_list = bool(first_cells and _is_list_marker(first_cells[0]))
+    long_row_ratio = sum(1 for row in rows if _is_paragraph_like_row(row, region_width)) / max(1, len(rows))
+
+    if first_row_starts_list and list_like_ratio >= 0.35 and (long_row_ratio >= 0.2 or len(column_centers) > 6):
+        return None
+    if long_row_ratio >= 0.45 and complete_rows < math.ceil(len(rows) * 0.75):
+        return None
+
+    return _BorderlessLayout(
+        rows=rows,
+        column_centers=column_centers,
+        row_bboxes=row_bboxes,
+        diagnostics={
+            "row_count": len(rows),
+            "column_count": len(column_centers),
+            "min_aligned_rows": min_aligned_rows,
+            "covered_rows": covered_rows,
+            "complete_rows": complete_rows,
+            "list_like_first_cell_ratio": round(list_like_ratio, 3),
+            "long_row_ratio": round(long_row_ratio, 3),
+        },
+    )
+
+
+def _aligned_hit_count(row: List[ElementArtifact], column_centers: List[int], tolerance: float) -> int:
+    centers = [_bbox_center(item.bbox or [0, 0, 0, 0])[0] for item in row]
+    return sum(1 for center in column_centers if any(abs(item - center) <= tolerance for item in centers))
+
+
+def _is_list_marker(text: str) -> bool:
+    cleaned = text.strip()
+    return bool(re.fullmatch(r"([0-9]{1,3}|[A-Za-z]|[a-z])[\.\)、)]", cleaned))
+
+
+def _is_paragraph_like_row(row: List[ElementArtifact], region_width: int) -> bool:
+    for item in row:
+        text = item.text.strip()
+        bbox = item.bbox or [0, 0, 0, 0]
+        if len(text) >= 80 or bbox[2] / max(1, region_width) >= 0.55:
+            return True
+    return False
 
 
 def _group_elements_by_row(elements: List[ElementArtifact]) -> List[List[ElementArtifact]]:

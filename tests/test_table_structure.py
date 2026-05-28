@@ -131,6 +131,19 @@ def test_borderless_table_uses_alignment_strategy_without_ruling_lines():
     _assert_edge_integrity(doc)
 
 
+def test_numbered_notes_are_not_inferred_as_borderless_table():
+    _, doc = _parse_fixture("sample_text_numbered_notes.pdf")
+
+    assert doc["tables"] == []
+    assert not any(block["kind"] == "table" for block in doc["blocks"])
+    assert not any(
+        item["element_type"] == "table_region"
+        and item.get("raw_ref", {}).get("reason") == "text_alignment"
+        for item in doc["elements"]
+    )
+    _assert_edge_integrity(doc)
+
+
 def test_scanned_low_confidence_table_keeps_cells_and_requires_review():
     _, doc = _parse_fixture("sample_table_scanned_low_conf.pdf")
     table = doc["tables"][0]
