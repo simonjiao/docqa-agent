@@ -89,6 +89,27 @@ def test_ruled_table_writes_structure_artifacts_and_table_chunks():
     )
 
 
+def test_ruled_table_merged_row_uses_col_span_without_copying_value():
+    _, doc = _parse_fixture("sample_table_merged_row.pdf")
+    table = doc["tables"][0]
+
+    assert table["strategy"] == "ruled_grid"
+    assert table["status"] == "pass"
+    cells = [
+        item
+        for item in doc["elements"]
+        if item["element_type"] == "table_cell"
+        and item.get("source_group_id") == table["table_id"]
+    ]
+    single_cell_values = [cell for cell in cells if cell.get("text") == "Single Cell"]
+    assert len(single_cell_values) == 1
+    assert single_cell_values[0]["raw_ref"]["column_index"] == 1
+    assert single_cell_values[0]["raw_ref"]["col_span"] == 3
+    assert table["rows"][0]["cells"]["col_2"] == "Single Cell"
+    assert "Single Cell" not in table["rows"][0]["cells"]["Report Date"]
+    assert "Single Cell" not in table["rows"][0]["cells"]["2025-12-29"]
+
+
 def test_borderless_table_uses_alignment_strategy_without_ruling_lines():
     _, doc = _parse_fixture("sample_table_borderless.pdf")
     table = doc["tables"][0]

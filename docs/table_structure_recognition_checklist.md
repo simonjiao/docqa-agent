@@ -24,6 +24,7 @@
 
 - [x] 有线表格：从 ruling lines 恢复 grid、row、column、cell。
 - [x] 有线表格：多行长文本 cell 归并到同一 cell。
+- [x] 有线表格：行级缺失竖线生成 `col_span`，跨列值只进入一个合并 cell，不复制到多个 cell。
 - [x] 无线或弱线表格：从文本 bbox 聚类行列并生成结构。
 - [x] 无线或弱线表格：列边界不稳定时给出 warning。
 - [x] 扫描或 OCR 低质量表格：先恢复 cell bbox，再做 cell-level OCR。
@@ -49,6 +50,7 @@
 ## 5. 验证与测试
 
 - [x] 增加有线表格测试。
+- [x] 增加行级合并单元格 `col_span` 和禁止复制值的回归测试。
 - [x] 增加无线或弱线表格测试。
 - [x] 增加扫描或 OCR 低质量表格测试。
 - [x] 增加 edge 完整性和 table chunk 追溯测试。

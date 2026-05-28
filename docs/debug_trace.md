@@ -680,3 +680,38 @@ evaluate.py --sample completed; all sample cases returned validation checks
 补充记录：最终验证时组合命令中使用系统 `python` 读取 `/tmp/docqa_table_eval.json`，本机 shell 返回 `zsh:1: command not found: python`；改用 `.venv/bin/python` 读取同一评估产物成功，确认 5 个 case 均返回验证检查。
 
 剩余风险：规则解析已覆盖三类目标 fixture；真实复杂财报、跨页表格、旋转表格和嵌套表格仍需要后续 golden set 扩展，但当前实现不会把失败结构当作确定答案。
+
+## 2026-05-28 13:06:06 CST 合并单元格跨列文本复制修复
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户指出：类似“样本类型 / 单细胞”这种表格行，内容视觉上横跨多列，但语义上是一个合并值，不应把同一内容复制到多个 cell。
+
+根因：
+
+- ruled grid parser 先按整张表的全局竖线切列。
+- cell 文本分配按 bbox overlap 判断，同一个跨列文本候选可能命中多个 cell。
+- 对行级缺失竖线没有生成 `col_span`，因此合并单元格被错误拆成多个普通 cell。
+
+修复：
+
+- 有线表格按每一行实际存在的竖线生成 row-level cell 边界。
+- 当某一行内部竖线缺失时，生成单个合并 cell，并在 `table_cell.raw_ref.col_span` 记录跨列数。
+- 同一行内每个文本候选只分配给得分最高的一个 cell，避免跨列值复制。
+- 新增 `docs-for-test/sample_table_merged_row.pdf` 和回归测试，断言 `Single Cell` 只出现一次且 `col_span=3`。
+
+验证结果：
+
+```text
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q tests/test_table_structure.py
+4 passed, 5 warnings
+
+node --check app/web/static/app.js
+passed
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q
+20 passed, 5 warnings
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/python scripts/evaluate.py --sample
+5 cases completed with validation checks
+```

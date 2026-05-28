@@ -29,7 +29,7 @@ class TableParseResult:
 @dataclass
 class _GridResult:
     strategy: str
-    cells: List[List[List[int]]]
+    cells: List[List[Dict[str, Any]]]
     row_bboxes: List[List[int]]
     column_bboxes: List[List[int]]
     line_bboxes: List[List[int]]
@@ -205,11 +205,13 @@ def parse_tables(
         cell_confidences: List[float] = []
         for row_index, row_cells in enumerate(grid.cells):
             text_row: List[str] = []
-            for column_index, cell_bbox in enumerate(row_cells):
+            row_assignments = _assign_candidates_to_cells(row_cells, assignment_candidates)
+            for column_index, cell_info in enumerate(row_cells):
+                cell_bbox = _cell_bbox(cell_info)
                 cell_id = next_element_id()
                 cell_text = _cell_text(
                     cell_bbox,
-                    assignment_candidates,
+                    row_assignments.get(column_index, []),
                     image,
                     use_cell_ocr=(strategy == "scanned_ocr_table"),
                 )
@@ -234,9 +236,9 @@ def parse_tables(
                     raw_ref={
                         "table_id": table_id,
                         "row_index": row_index,
-                        "column_index": column_index,
-                        "row_span": 1,
-                        "col_span": 1,
+                        "column_index": cell_info.get("column_index", column_index),
+                        "row_span": cell_info.get("row_span", 1),
+                        "col_span": cell_info.get("col_span", 1),
                     },
                     extractor={"name": "table_parser.v1", "strategy": strategy},
                     quality={"status": "needs_review" if "needs_review" in warnings else "pass", "signals": warnings},
@@ -348,15 +350,30 @@ def _parse_ruled_grid(image: Image.Image, bbox: List[int]) -> Optional[_GridResu
     if len(xs) < 2 or len(ys) < 2:
         return None
 
-    cells: List[List[List[int]]] = []
+    cells: List[List[Dict[str, Any]]] = []
     for row_idx in range(len(ys) - 1):
+        row_top, row_bottom = y + ys[row_idx], y + ys[row_idx + 1]
+        row_boundaries = [{"x": 0, "global_index": 0}]
+        for col_idx, boundary in enumerate(xs[1:-1], start=1):
+            if _vertical_boundary_present(x + boundary, row_top, row_bottom, vertical_lines):
+                row_boundaries.append({"x": boundary, "global_index": col_idx})
+        row_boundaries.append({"x": w, "global_index": len(xs) - 1})
+        row_boundaries = sorted(row_boundaries, key=lambda item: item["x"])
         row = []
-        for col_idx in range(len(xs) - 1):
-            left, right = x + xs[col_idx], x + xs[col_idx + 1]
-            top, bottom = y + ys[row_idx], y + ys[row_idx + 1]
+        for left_boundary, right_boundary in zip(row_boundaries, row_boundaries[1:]):
+            left, right = x + left_boundary["x"], x + right_boundary["x"]
+            top, bottom = row_top, row_bottom
             if right - left < 8 or bottom - top < 8:
                 continue
-            row.append([left, top, right - left, bottom - top])
+            row.append(
+                {
+                    "bbox": [left, top, right - left, bottom - top],
+                    "row_index": row_idx,
+                    "column_index": left_boundary["global_index"],
+                    "row_span": 1,
+                    "col_span": max(1, right_boundary["global_index"] - left_boundary["global_index"]),
+                }
+            )
         if row:
             cells.append(row)
     if not cells:
@@ -366,8 +383,8 @@ def _parse_ruled_grid(image: Image.Image, bbox: List[int]) -> Optional[_GridResu
     return _GridResult(
         strategy="ruled_grid",
         cells=cells,
-        row_bboxes=[_union_bbox(row) for row in cells],
-        column_bboxes=[_union_bbox([row[idx] for row in cells if idx < len(row)]) for idx in range(max(len(row) for row in cells))],
+        row_bboxes=[_union_bbox([_cell_bbox(cell) for cell in row]) for row in cells],
+        column_bboxes=[[x + xs[idx], y, xs[idx + 1] - xs[idx], h] for idx in range(len(xs) - 1)],
         line_bboxes=line_bboxes,
         confidence=round(confidence, 3),
         warnings=[],
@@ -399,11 +416,19 @@ def _parse_borderless_grid(region_bbox: List[int], candidates: List[ElementArtif
         y_boundaries.append(int(round((prev_bottom + next_top) / 2)))
     y_boundaries.append(min(y + h, row_bottoms[-1] + 6))
 
-    cells: List[List[List[int]]] = []
+    cells: List[List[Dict[str, Any]]] = []
     for row_idx in range(len(y_boundaries) - 1):
         row = []
         for col_idx in range(len(boundaries) - 1):
-            row.append([boundaries[col_idx], y_boundaries[row_idx], boundaries[col_idx + 1] - boundaries[col_idx], y_boundaries[row_idx + 1] - y_boundaries[row_idx]])
+            row.append(
+                {
+                    "bbox": [boundaries[col_idx], y_boundaries[row_idx], boundaries[col_idx + 1] - boundaries[col_idx], y_boundaries[row_idx + 1] - y_boundaries[row_idx]],
+                    "row_index": row_idx,
+                    "column_index": col_idx,
+                    "row_span": 1,
+                    "col_span": 1,
+                }
+            )
         cells.append(row)
     warnings = []
     expected = len(cells[0]) if cells else 0
@@ -413,8 +438,8 @@ def _parse_borderless_grid(region_bbox: List[int], candidates: List[ElementArtif
     return _GridResult(
         strategy="borderless_alignment",
         cells=cells,
-        row_bboxes=[_union_bbox(row) for row in cells],
-        column_bboxes=[_union_bbox([row[idx] for row in cells if idx < len(row)]) for idx in range(max(len(row) for row in cells))],
+        row_bboxes=[_union_bbox([_cell_bbox(cell) for cell in row]) for row in cells],
+        column_bboxes=[_union_bbox([_cell_bbox(row[idx]) for row in cells if idx < len(row)]) for idx in range(max(len(row) for row in cells))],
         line_bboxes=[],
         confidence=confidence,
         warnings=warnings,
@@ -440,6 +465,42 @@ def _line_positions(mask: Any, orientation: str, table_bbox: List[int]) -> Tuple
     return sorted(positions), bboxes
 
 
+def _vertical_boundary_present(abs_x: int, row_top: int, row_bottom: int, vertical_lines: List[List[int]]) -> bool:
+    row_height = max(1, row_bottom - row_top)
+    for line in vertical_lines:
+        if not _valid_bbox(line):
+            continue
+        line_center = line[0] + line[2] / 2
+        if abs(line_center - abs_x) > max(6, line[2] + 3):
+            continue
+        overlap = _axis_overlap(row_top, row_bottom, line[1], line[1] + line[3])
+        if overlap / row_height >= 0.45:
+            return True
+    return False
+
+
+def _assign_candidates_to_cells(cells: List[Dict[str, Any]], candidates: List[ElementArtifact]) -> Dict[int, List[ElementArtifact]]:
+    assignments: Dict[int, List[ElementArtifact]] = {idx: [] for idx in range(len(cells))}
+    for candidate in candidates:
+        candidate_bbox = candidate.bbox or []
+        if not _valid_bbox(candidate_bbox):
+            continue
+        best_idx: Optional[int] = None
+        best_score = 0.0
+        center = _bbox_center(candidate_bbox)
+        for idx, cell in enumerate(cells):
+            bbox = _cell_bbox(cell)
+            score = _bbox_overlap_candidate_ratio(candidate_bbox, bbox)
+            if _point_in_bbox(center, bbox):
+                score += 2.0
+            if score > best_score:
+                best_idx = idx
+                best_score = score
+        if best_idx is not None and best_score > 0.01:
+            assignments[best_idx].append(candidate)
+    return assignments
+
+
 def _cell_text(cell_bbox: List[int], candidates: List[ElementArtifact], image: Image.Image, use_cell_ocr: bool) -> _CellText:
     assigned = _elements_in_bbox(candidates, cell_bbox, min_overlap=0.05)
     assigned = sorted(assigned, key=lambda item: ((item.bbox or [0, 0, 0, 0])[1], (item.bbox or [0, 0, 0, 0])[0], item.reading_order))
@@ -458,6 +519,12 @@ def _cell_text(cell_bbox: List[int], candidates: List[ElementArtifact], image: I
         warnings=warnings,
         used_cell_ocr=False,
     )
+
+
+def _cell_bbox(cell: Dict[str, Any] | List[int]) -> List[int]:
+    if isinstance(cell, dict):
+        return list(cell.get("bbox") or [0, 0, 0, 0])
+    return list(cell)
 
 
 def _ocr_cell(image: Image.Image, bbox: List[int]) -> Tuple[str, float]:
@@ -852,6 +919,10 @@ def _valid_bbox(bbox: List[int]) -> bool:
 
 def _bbox_center(bbox: List[int]) -> Tuple[float, float]:
     return bbox[0] + bbox[2] / 2, bbox[1] + bbox[3] / 2
+
+
+def _axis_overlap(a1: float, a2: float, b1: float, b2: float) -> float:
+    return max(0.0, min(a2, b2) - max(a1, b1))
 
 
 def _point_in_bbox(point: Tuple[float, float], bbox: List[int]) -> bool:
