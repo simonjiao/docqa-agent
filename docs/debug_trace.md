@@ -491,3 +491,24 @@ tmux list-sessions | rg 'docqa|uvicorn|8010|8000'
 8010: no listener
 tmux: docqa_agent_prototype: 1 windows
 ```
+
+## 2026-05-28 11:31:19 CST 识别行选中态不明显
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：识别内容点击某一行后，没有高亮选中。
+
+处理摘要：
+
+- 复用当前 `8000` 服务验证，没有启动新的 Web 测试环境。
+- Playwright 检查确认点击后 DOM 已有 `ocr-line active`，但样式只有浅色背景和 1px 边框，视觉上不够明确。
+- 加强 `.ocr-line.active` 和 `.table-card.active` 选中态：更明显的蓝色背景、左侧色条和外层高亮阴影。
+- 更新静态资源 query string，避免浏览器继续使用旧 CSS。
+
+验证摘要：
+
+```text
+点击识别行后 activeCount=1。
+选中项 className=ocr-line active。
+选中态包含明显 box-shadow 和高亮背景。
+```
