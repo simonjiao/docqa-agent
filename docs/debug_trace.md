@@ -385,3 +385,34 @@ evaluate.py --sample completed; sample probe pdf_type=scan_pdf
 ```
 
 剩余风险：PyMuPDF/SWIG DeprecationWarning 仍存在，不影响当前测试；真实业务 PDF 的隐藏文本可见性、签名深解析和表格单元格恢复仍需后续专项样本验证。
+
+## 2026-05-28 11:16:38 CST 程序重启记录
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：重启程序。
+
+处理摘要：
+
+- 发现 8000 端口原监听进程 PID 80322，已停止。
+- 直接用 `nohup ./run.sh` 后没有形成监听进程；排查发现当前非交互 shell 中 `uvicorn` 不在 PATH，但 `.venv/bin/uvicorn` 可用。
+- 前台使用 `.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload` 验证成功，HTTP `/` 返回 200。
+- 为避免服务绑定在当前工具会话上，改用 detached `tmux` 会话 `docqa_agent_prototype` 持久运行。
+
+验证命令：
+
+```bash
+lsof -nP -iTCP:8000 -sTCP:LISTEN
+curl -sS -o /tmp/docqa_agent_prototype_root.html -w '%{http_code}\n' http://127.0.0.1:8000/
+tmux list-sessions | rg '^docqa_agent_prototype:'
+```
+
+结果摘要：
+
+```text
+Python 16916/16919 listening on *:8000
+HTTP 200
+docqa_agent_prototype: 1 windows
+```
+
+剩余风险：`run.sh` 依赖 `uvicorn` 在 PATH 中；当前重启采用 `.venv/bin/uvicorn`，后续如需一键脚本在非交互 shell 中稳定运行，可考虑让 `run.sh` 优先使用 `.venv/bin/uvicorn`。
