@@ -586,3 +586,40 @@ evaluate.py --sample completed; sample probe pdf_type=scan_pdf
 visible_text primary block: confidence_display=文本层抽取
 image_ocr fallback line: confidence_display=OCR置信度 96.4/100
 ```
+
+## 2026-05-28 12:25:59 CST 当前页表格识别检查
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：检查正在查看的页面中表格识别情况。当前 Firefox 页面为 `http://127.0.0.1:8000`，文档 `20251229陈海平-e23bf7f4264dfe2c` 第 1 页。
+
+检查命令：
+
+```bash
+curl -s http://127.0.0.1:8000/api/docs/20251229陈海平-e23bf7f4264dfe2c/pages/1/recognition | jq '{checks, page: {image_width: .page.image_width, image_height: .page.image_height, average_confidence: .page.average_confidence, table_regions: .page.table_regions, line_count: (.page.lines|length), lines: .page.lines}}'
+jq -c 'select(.page_no==1 and .element_type=="table_region") | {element_id,page_no,bbox,raw_ref,extractor}' storage/20251229陈海平-e23bf7f4264dfe2c/elements.jsonl
+jq -c 'select(.page_no==1) | {block_id,role,text,bbox,confidence,source_types,source_group_ids,warnings}' storage/20251229陈海平-e23bf7f4264dfe2c/blocks.jsonl
+jq -c 'select(.page==1) | {id,kind,page,text,source_block_ids,alternative_block_ids,source_types,confidence,warnings}' storage/20251229陈海平-e23bf7f4264dfe2c/chunks.jsonl
+```
+
+结果摘要：
+
+```text
+第 1 页 image_size=992x1404，line_count=15。
+checks: ocr_confidence=warn，average_confidence=47.86；text_density=pass；table_region_detection=pass。
+检测到 2 个疑似表格区域：
+- table-2 / p0001-e0276 bbox=[33,122,932,454]，覆盖上方“基本信息”表。
+- table-1 / p0001-e0277 bbox=[33,631,936,216]，覆盖下方“结果信息”表。
+primary blocks 来源为 visible_text，右侧识别内容显示“文本层抽取”。
+image_ocr alternative blocks 对表格区域识别质量较差，例如 "asf ww [el |"、"Com Ls I ae |"，均带 low_ocr_confidence。
+```
+
+当前判断：
+
+- 表格区域检测基本命中，能把第 1 页两个带 ruling lines 的表格框出来。
+- 当前实现只生成 `table_region`，并标记 `needs_specialized_parser`；没有生成 `table_row` / `table_cell` 结构。
+- 识别列表仍是按文本层 block 展示，表格内容被拉平成行文本。下方结果表中，`CHP01` 行的检测结果被拆成多条 block，行列关系没有被结构化保留。
+
+修复或 workaround：本次只做检查，未改代码。若后续要让问答可靠使用表格，应增加专门的表格结构解析，至少把 `样本名/评级/编码/检测结果/结果解释` 恢复为行列单元格。
+
+验证结果：本地 API 返回 HTTP 200，识别视图与落盘 `elements.jsonl`、`blocks.jsonl`、`chunks.jsonl` 一致。
