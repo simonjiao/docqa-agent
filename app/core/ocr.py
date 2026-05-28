@@ -18,8 +18,34 @@ except Exception:  # pragma: no cover - optional dependency fallback
 
 
 DEFAULT_DPI = int(os.getenv("OCR_DPI", "120"))
-DEFAULT_LANG = os.getenv("OCR_LANG", "HanS+eng")
 DEFAULT_TIMEOUT = int(os.getenv("OCR_TIMEOUT", "30"))
+
+
+def resolve_ocr_lang(requested: str | None = None, available: List[str] | None = None) -> str:
+    """Return a Tesseract language string that works for Chinese + English.
+
+    Homebrew's tesseract-lang exposes Simplified Chinese as ``chi_sim`` and
+    script data as ``script/HanS``; plain ``HanS`` is not a loadable language.
+    """
+    if available is None:
+        try:
+            available = pytesseract.get_languages(config="")
+        except Exception:
+            available = []
+    available_set = set(available)
+    lang = requested or os.getenv("OCR_LANG") or "chi_sim+eng"
+    parts = []
+    for part in [item for item in lang.split("+") if item]:
+        if part == "HanS" and part not in available_set:
+            if "chi_sim" in available_set:
+                part = "chi_sim"
+            elif "script/HanS" in available_set:
+                part = "script/HanS"
+        parts.append(part)
+    return "+".join(parts) or "eng"
+
+
+DEFAULT_LANG = resolve_ocr_lang()
 
 
 def render_page(pdf_path: Path, page_index: int, out_path: Path, dpi: int = DEFAULT_DPI) -> Tuple[int, int]:
@@ -40,13 +66,14 @@ def _safe_conf(value: str) -> float:
         return -1.0
 
 
-def ocr_image(image_path: Path, page_no: int, lang: str = DEFAULT_LANG) -> PageRecognition:
+def ocr_image(image_path: Path, page_no: int, lang: str | None = None) -> PageRecognition:
     """OCR rendered page and group words into line records."""
     image = Image.open(image_path)
+    effective_lang = resolve_ocr_lang(lang or DEFAULT_LANG)
     try:
         data = pytesseract.image_to_data(
             image,
-            lang=lang,
+            lang=effective_lang,
             config="--psm 6",
             output_type=pytesseract.Output.DICT,
             timeout=DEFAULT_TIMEOUT,

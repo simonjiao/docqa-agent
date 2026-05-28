@@ -66,7 +66,7 @@ async function uploadPdf() {
   const form = new FormData();
   form.append("file", file);
   setUploadBusy(true);
-  setStatus("正在上传并进行 OCR，请稍候……");
+  setStatus("正在上传并进行解析，请稍候……");
   try {
     const res = await fetch("/api/upload", { method: "POST", body: form });
     if (!res.ok) { setStatus(await res.text()); return; }

@@ -200,7 +200,7 @@ def process_pdf(doc_id: str, pdf_path: Path) -> Dict:
 
         _link_text_candidates(page_elements, ocr_elements, add_edge)
 
-        primary_text = _primary_text_elements(page_elements, ocr_elements)
+        primary_text = _primary_text_elements(page_elements, ocr_elements, include_unmatched_ocr=page_image_blocks > 0)
         alternative_text = _alternative_text_elements(page_elements, ocr_elements, primary_text)
         page_blocks = _build_blocks_from_elements(
             doc_id,
@@ -532,34 +532,106 @@ def _build_blocks_from_elements(
     role: str = "primary",
 ) -> List[BlockArtifact]:
     blocks = []
-    for offset, element in enumerate(text_elements):
-        if not element.text.strip():
-            continue
-        bbox = element.bbox or [0, 0, 0, 0]
+    for offset, group in enumerate(_group_text_elements(text_elements)):
+        bbox = _union_bbox([element.bbox or [0, 0, 0, 0] for element in group])
+        text = _merge_text_elements(group)
+        source_types = sorted({element.source_type for element in group})
+        source_group_ids = sorted({element.source_group_id for element in group if element.source_group_id})
+        warnings = sorted({signal for element in group for signal in element.quality.get("signals", [])})
+        if role != "primary":
+            warnings = sorted(set(warnings + ["alternative_candidate"]))
+        confidences = [float(element.confidence if element.confidence is not None else 1.0) for element in group]
         blocks.append(
             BlockArtifact(
                 block_id=f"{page_id}-b{start_index + offset:04d}",
                 doc_id=doc_id,
                 page_id=page_id,
                 page_no=page_no,
-                text=element.text,
-                element_ids=[element.element_id],
-                source_types=[element.source_type],
-                source_group_ids=[element.source_group_id] if element.source_group_id else [],
+                text=text,
+                element_ids=[element.element_id for element in group],
+                source_types=source_types,
+                source_group_ids=source_group_ids,
                 bbox=bbox,
-                kind="table" if "表" in element.text or "AQL" in element.text or "检查项目" in element.text else "text",
+                kind="table" if "表" in text or "AQL" in text or "检查项目" in text else "text",
                 role=role,
-                confidence=float(element.confidence or 1.0),
-                warnings=sorted(set(element.quality.get("signals", []) + ([] if role == "primary" else ["alternative_candidate"]))),
+                confidence=round(sum(confidences) / max(1, len(confidences)), 3),
+                warnings=warnings,
             )
         )
     return blocks
 
 
-def _primary_text_elements(page_elements: List[ElementArtifact], ocr_elements: List[ElementArtifact]) -> List[ElementArtifact]:
+def _group_text_elements(text_elements: List[ElementArtifact]) -> List[List[ElementArtifact]]:
+    groups: List[List[ElementArtifact]] = []
+    for element in sorted([item for item in text_elements if item.text.strip()], key=_reading_position):
+        if groups and _same_visual_line(groups[-1], element):
+            groups[-1].append(element)
+        else:
+            groups.append([element])
+    return [sorted(group, key=lambda item: ((item.bbox or [0, 0, 0, 0])[0], item.reading_order)) for group in groups]
+
+
+def _same_visual_line(group: List[ElementArtifact], element: ElementArtifact) -> bool:
+    group_bbox = _union_bbox([item.bbox or [0, 0, 0, 0] for item in group])
+    bbox = element.bbox or [0, 0, 0, 0]
+    if len(group_bbox) != 4 or len(bbox) != 4:
+        return False
+    group_center = group_bbox[1] + group_bbox[3] / 2
+    center = bbox[1] + bbox[3] / 2
+    max_height = max(group_bbox[3], bbox[3], 1)
+    vertical_overlap = _axis_overlap(group_bbox[1], group_bbox[1] + group_bbox[3], bbox[1], bbox[1] + bbox[3])
+    overlap_ratio = vertical_overlap / max(1, min(group_bbox[3], bbox[3]))
+    return abs(center - group_center) <= max(6, max_height * 0.45) or overlap_ratio >= 0.6
+
+
+def _merge_text_elements(elements: List[ElementArtifact]) -> str:
+    text = ""
+    previous_bbox: Optional[List[int]] = None
+    for element in elements:
+        current = element.text.strip()
+        if not current:
+            continue
+        bbox = element.bbox or [0, 0, 0, 0]
+        if text and previous_bbox and _needs_space_between(previous_bbox, bbox, text[-1], current[0]):
+            text += " "
+        text += current
+        previous_bbox = bbox
+    return text.strip()
+
+
+def _needs_space_between(previous_bbox: List[int], bbox: List[int], previous_char: str, current_char: str) -> bool:
+    if previous_char.isspace() or current_char.isspace():
+        return False
+    if current_char in ",.;:!?，。；：！？、)]}）】":
+        return False
+    if previous_char in "([{（【":
+        return False
+    gap = bbox[0] - (previous_bbox[0] + previous_bbox[2])
+    threshold = max(4, min(previous_bbox[3], bbox[3]) * 0.35)
+    return gap > threshold
+
+
+def _union_bbox(bboxes: List[List[int]]) -> List[int]:
+    valid = [bbox for bbox in bboxes if len(bbox) == 4]
+    if not valid:
+        return [0, 0, 0, 0]
+    left = min(bbox[0] for bbox in valid)
+    top = min(bbox[1] for bbox in valid)
+    right = max(bbox[0] + bbox[2] for bbox in valid)
+    bottom = max(bbox[1] + bbox[3] for bbox in valid)
+    return [left, top, right - left, bottom - top]
+
+
+def _axis_overlap(a1: float, a2: float, b1: float, b2: float) -> float:
+    return max(0.0, min(a2, b2) - max(a1, b1))
+
+
+def _primary_text_elements(page_elements: List[ElementArtifact], ocr_elements: List[ElementArtifact], include_unmatched_ocr: bool) -> List[ElementArtifact]:
     visible_text = [item for item in page_elements if item.element_type == "text_span" and item.text.strip()]
     visible_chars = sum(len(item.text.strip()) for item in visible_text)
     if visible_chars >= 80:
+        if not include_unmatched_ocr:
+            return sorted(visible_text, key=_reading_position)
         visible_group_ids = {item.source_group_id for item in visible_text if item.source_group_id}
         unmatched_ocr = [
             item

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-export OCR_LANG=${OCR_LANG:-HanS+eng}
+export OCR_LANG=${OCR_LANG:-chi_sim+eng}
 export STORAGE_DIR=${STORAGE_DIR:-./storage}
 if [[ -x ".venv/bin/uvicorn" ]]; then
   UVICORN=".venv/bin/uvicorn"

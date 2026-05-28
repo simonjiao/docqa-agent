@@ -25,3 +25,11 @@ def test_probe_fixture_pdf_types():
     for filename, expected_type in cases.items():
         result = probe_pdf(FIXTURES / filename)
         assert result.pdf_type == expected_type
+
+
+def test_text_pdf_with_vector_glyphs_is_not_drawing_primary():
+    result = probe_pdf(FIXTURES / "多智能体平台JD.pdf")
+    assert result.pdf_type == "text_pdf"
+    assert result.has_text_layer is True
+    assert result.has_vector_drawings is True
+    assert "drawing_pdf" in result.pdf_type_candidates

@@ -9,6 +9,7 @@ This directory holds PDF files used by automated tests and local evaluation.
 - `sample_form.pdf`: synthetic AcroForm text-field PDF.
 - `sample_drawing.pdf`: synthetic vector drawing PDF.
 - `sample_protected.pdf`: synthetic password-protected PDF.
+- `多智能体平台JD.pdf`: real-world text-layer Chinese/English PDF with Type3/vector glyph signals.
 
 Future fixtures should be added here by PDF type:
 

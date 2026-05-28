@@ -72,10 +72,12 @@ def probe_pdf(pdf_path: Path) -> PdfProbeResult:
         pdf_type = "form_pdf"
         strategy = "extract_form_fields_plus_page_elements"
         notes.append("PDF contains form widgets; extract fields and page elements.")
-    elif avg_chars >= 30 and not has_images and not has_vector_drawings:
+    elif avg_chars >= 30 and not has_images:
         pdf_type = "text_pdf"
         strategy = "extract_text_then_ocr_fallback"
         notes.append("PDF has a usable text layer; use text extraction first.")
+        if has_vector_drawings:
+            notes.append("PDF also has vector drawings; preserve them as secondary visual elements.")
     elif avg_chars >= 30 and has_images:
         pdf_type = "ocr_pdf"
         strategy = "hidden_text_quality_check_plus_region_ocr"

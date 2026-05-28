@@ -512,3 +512,56 @@ tmux: docqa_agent_prototype: 1 windows
 选中项 className=ocr-line active。
 选中态包含明显 box-shadow 和高亮背景。
 ```
+
+## 2026-05-28 11:40:16 CST 中文文本层 PDF 被误判和 OCR 乱码
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：排查 `多智能体平台JD.pdf` 看着像文本 PDF，但 UI 识别内容显示乱码，怀疑中文不支持；要求继续并记录 debug trace。
+
+处理摘要：
+
+- 在上层目录找到 `../docs-for-test/多智能体平台JD.pdf`，复制到项目内 `docs-for-test/` 作为回归 fixture。
+- 用 PyMuPDF 检查第 1 页，确认文本层可直接抽取中文：`text_len=851`，包含 `多智能体平台JD` 和中文正文。
+- 原 `pdf_probe` 因页面有少量 vector drawings，把主类型判为 `drawing_pdf`；实际应以可用文本层为主，vector 只作为候选/辅助视觉元素。
+- 原识别内容 API 只返回 `ocr_text`，导致文本层中文虽然已进入 blocks/chunks，但右侧仍显示 OCR 行。
+- 本机 Tesseract 语言列表有 `chi_sim`、`eng`、`script/HanS`，没有 plain `HanS.traineddata`；`HanS+eng` 会导致中文 OCR 退化或报错。
+- 另发现该 PDF 的中文文本层由 Type3 字体产生，PyMuPDF span 很多是单字级；需要把同视觉行 span 合并成 block，避免一字一行。
+
+修复：
+
+- 默认 OCR 语言改为 `chi_sim+eng`。
+- 新增 `resolve_ocr_lang()`，把旧配置 `HanS+eng` 映射到本机可用的 `chi_sim+eng` 或 `script/HanS+eng`。
+- `pdf_probe` 在文本层充足且无图片时主判 `text_pdf`，同时保留 `drawing_pdf` 候选。
+- 页面识别 API 优先返回 primary blocks；没有 block 时才回退到原始 OCR 行。
+- parser 将同一视觉行的 text spans 合并为一个 block。
+
+验证摘要：
+
+```text
+probe_pdf(多智能体平台JD.pdf): pdf_type=text_pdf, candidates=['drawing_pdf', 'text_pdf']
+第 1 页识别内容 line_count=25
+前几行 source_type=visible_text:
+多智能体平台JD
+1.Senior Multi-Agent Platform Engineer
+我们在做什么
+我们正在建设一个面向复杂知识工作和长期自主任务的新一代多智能体AI平台。
+```
+
+测试命令：
+
+```bash
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q tests/test_ocr_lang.py tests/test_pdf_probe_sample.py tests/test_recognition_view.py tests/test_chunker.py
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q
+STORAGE_DIR=$(mktemp -d) .venv/bin/python scripts/evaluate.py --sample
+```
+
+结果摘要：
+
+```text
+7 passed, 5 warnings
+15 passed, 5 warnings
+evaluate.py --sample completed; sample probe pdf_type=scan_pdf
+```
+
+剩余风险：真实文本层 PDF 的阅读顺序和断行仍依赖 PDF span/bbox 质量；当前按视觉行合并，尚未做跨行段落重组。

@@ -92,20 +92,7 @@ def get_page_recognition(doc_id: str, page_no: int) -> Dict[str, Any]:
     doc = load_document(doc_id)
     for page in doc["pages"]:
         if page["page_no"] == page_no:
-            lines = [
-                {
-                    "id": element.get("raw_ref", {}).get("ocr_line_id", element["element_id"]),
-                    "element_id": element["element_id"],
-                    "page": page_no,
-                    "text": element.get("text", ""),
-                    "bbox": element.get("bbox") or [0, 0, 0, 0],
-                    "confidence": element.get("confidence") or 0,
-                    "source_type": element.get("source_type"),
-                    "source_group_id": element.get("source_group_id"),
-                }
-                for element in doc["elements"]
-                if element.get("page_no") == page_no and element.get("element_type") == "ocr_text"
-            ]
+            lines = _page_recognition_lines(doc, page_no)
             table_regions = [
                 {
                     "id": element.get("raw_ref", {}).get("table_id", element["element_id"]),
@@ -130,6 +117,40 @@ def get_page_recognition(doc_id: str, page_no: int) -> Dict[str, Any]:
                 "checks": page.get("checks", []),
             }
     raise HTTPException(status_code=404, detail="Page recognition not found.")
+
+
+def _page_recognition_lines(doc: Dict[str, Any], page_no: int) -> list[dict[str, Any]]:
+    block_lines = [
+        {
+            "id": block["block_id"],
+            "element_id": block["block_id"],
+            "page": page_no,
+            "text": block.get("text", ""),
+            "bbox": block.get("bbox") or [0, 0, 0, 0],
+            "confidence": block.get("confidence") or 0,
+            "source_type": ",".join(block.get("source_types", [])),
+            "source_group_id": ",".join(block.get("source_group_ids", [])),
+        }
+        for block in doc["blocks"]
+        if block.get("page_no") == page_no and block.get("role", "primary") == "primary"
+    ]
+    if block_lines:
+        return block_lines
+
+    return [
+        {
+            "id": element.get("raw_ref", {}).get("ocr_line_id", element["element_id"]),
+            "element_id": element["element_id"],
+            "page": page_no,
+            "text": element.get("text", ""),
+            "bbox": element.get("bbox") or [0, 0, 0, 0],
+            "confidence": element.get("confidence") or 0,
+            "source_type": element.get("source_type"),
+            "source_group_id": element.get("source_group_id"),
+        }
+        for element in doc["elements"]
+        if element.get("page_no") == page_no and element.get("element_type") == "ocr_text"
+    ]
 
 
 def _get_retriever(doc_id: str) -> TfidfRetriever:
