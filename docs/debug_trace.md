@@ -1242,3 +1242,48 @@ HTTP 200
 - 对同一区域做 300 DPI 局部 OCR 时，正文汉字有所改善，但闭引号仍被读成 `?`，`凹痕` 仍可能读成 `四痕`，说明单纯提高 DPI 不能完全解决。
 
 当前结论：这类错误应进入国标/扫描件标点归一化或低置信复核规则；不能用通用符号清理规则处理，否则会误删公式、化学式、物理符号和数据。
+
+## 2026-05-28 14:52:36 CST 国标第三页标题英文误识别
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户现象：当前国标文件第三页标题区域，图片上为中文 `键 技术条件`，识别结果为 `键 RARE`。
+
+诊断：
+
+- 对应 OCR element 为 `p0003-e0039`，文本 `键 RARE`，bbox `[394, 193, 155, 24]`，置信度约 `74.0`。
+- 该 element 没有 `raw_ref.original_text` 和外置规则记录，说明这是 Tesseract 原始 OCR 将黑体中文标题误读成英文大写，不是后处理替换造成。
+
+处理：
+
+- 扩展 `app/core/recognition_rules.py`，让 `text_rewrites` 支持 `page_numbers` 与 `bbox_ratio` 区域约束。
+- 在 `rules/document_recognition_rules.json` 增加 `chinese_national_standard.running_title_subject`，只修正第 3 页标题区域内的 `键 RARE` 为 `键 技术条件`。
+- 新增测试确认该规则是区域约束的：标题区会修正，正文中的 `键 RARE` 示例变量不会被全局替换。
+
+验证：
+
+```text
+FORCE_REPROCESS=1 .venv/bin/python - <<'PY'
+from pathlib import Path
+from app.core.parser import process_pdf
+from app.core.storage import load_document
+
+doc_id='GBT1568-2008键技术条件-e724ad081078fa41'
+pdf_path=Path('storage')/doc_id/'raw'/'source.pdf'
+process_pdf(doc_id,pdf_path)
+doc=load_document(doc_id)
+for chunk in doc['chunks']:
+    if chunk.get('page')==3 and 'GB/T 1568' in chunk.get('text',''):
+        print(repr(chunk['text']))
+PY
+'GB/T 1568—2008\n键 技术条件'
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q
+30 passed, 5 warnings
+
+tmux kill-session -t docqa_agent_prototype && tmux new-session -d -s docqa_agent_prototype -c /Users/simon/ai-agents/docqa_agent_prototype './run.sh'
+GET /
+HTTP 200
+```
+
+剩余风险：该规则是当前国标样本的区域化修正；其他标准文件的跑题页眉、不同题名或不同页面位置需要继续通过外置规则扩展。

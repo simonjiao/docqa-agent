@@ -38,6 +38,13 @@
           "replacement": "键 技术条件"
         },
         {
+          "id": "running_title_subject",
+          "page_numbers": [3],
+          "bbox_ratio": [0.30, 0.10, 0.40, 0.08],
+          "pattern": "^键\\s+[A-Z]{3,}$",
+          "replacement": "键 技术条件"
+        },
+        {
           "id": "cover_publish_word",
           "pattern": "全\\s*帮$",
           "replacement": "发布"

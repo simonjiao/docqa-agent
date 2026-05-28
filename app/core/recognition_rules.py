@@ -39,7 +39,14 @@ def apply_document_recognition_rules(
     for profile in profiles:
         if profile.get("compact_cjk_spacing"):
             applied.extend(_compact_cjk_text(ocr_elements, profile["id"]))
-        applied.extend(_apply_text_rewrites(ocr_elements, profile))
+        applied.extend(
+            _apply_text_rewrites(
+                ocr_elements,
+                profile,
+                image_width=image_width,
+                image_height=image_height,
+            )
+        )
         applied.extend(
             _apply_region_ocr_rewrites(
                 page_no=page_no,
@@ -141,19 +148,49 @@ def _compact_cjk_spacing(text: str) -> str:
     return text.strip()
 
 
-def _apply_text_rewrites(elements: List[ElementArtifact], profile: Dict[str, Any]) -> List[str]:
+def _apply_text_rewrites(
+    elements: List[ElementArtifact],
+    profile: Dict[str, Any],
+    *,
+    image_width: int,
+    image_height: int,
+) -> List[str]:
     applied: List[str] = []
     for rule in profile.get("text_rewrites", []):
         rule_id = f"{profile['id']}.{rule['id']}"
         pattern = re.compile(rule["pattern"], flags=re.IGNORECASE)
         replacement = rule.get("replacement", "")
         for element in elements:
+            if not _element_matches_rule_scope(element, rule, image_width=image_width, image_height=image_height):
+                continue
             updated = pattern.sub(replacement, element.text).strip()
             if updated == element.text:
                 continue
             _update_text(element, updated, rule_id)
             applied.append(rule_id)
     return applied
+
+
+def _element_matches_rule_scope(
+    element: ElementArtifact,
+    rule: Dict[str, Any],
+    *,
+    image_width: int,
+    image_height: int,
+) -> bool:
+    page_no = int(element.page_no or 0)
+    if not _page_matches(rule, page_no):
+        return False
+    ratio = rule.get("bbox_ratio")
+    if ratio is None:
+        return True
+    bbox = element.bbox or []
+    if not _valid_bbox(bbox):
+        return False
+    region_bbox = _ratio_bbox(ratio, image_width, image_height)
+    if region_bbox is None:
+        return False
+    return _bbox_overlap_candidate_ratio(bbox, region_bbox) >= float(rule.get("min_overlap", 0.35))
 
 
 def _apply_region_ocr_rewrites(
