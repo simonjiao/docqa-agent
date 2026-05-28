@@ -67,6 +67,28 @@ def test_build_answer_uses_llm_for_grounded_answer():
     assert llm_check["status"] == "pass"
 
 
+def test_build_answer_treats_national_standard_alias_as_grounded():
+    evidence = [
+        {
+            "chunk_id": "cover",
+            "page": 1,
+            "score": 0.2,
+            "kind": "text",
+            "text": "中华人民共和国国家标准\nGB/T 1568—2008\n键 技术条件",
+            "source_block_ids": ["cover-block"],
+            "alternative_block_ids": [],
+            "source_group_ids": [],
+            "source_types": ["image_ocr"],
+            "warnings": [],
+        }
+    ]
+    llm = FakeLLM("根据第1页，这是 GB/T 1568—2008《键 技术条件》。")
+    result = build_answer("这是什么国标", evidence, llm_client=llm)
+
+    assert result["mode"] == "llm_grounded"
+    assert "证据初步可用" in llm.user_prompt
+
+
 def test_answer_checks_fail_when_score_low():
     checks = answer_self_checks("问题", "当前知识库中没有找到足够依据回答该问题", [])
     score_check = next(c for c in checks if c["name"] == "evidence_score")

@@ -1287,3 +1287,56 @@ HTTP 200
 ```
 
 剩余风险：该规则是当前国标样本的区域化修正；其他标准文件的跑题页眉、不同题名或不同页面位置需要继续通过外置规则扩展。
+
+## 2026-05-28 14:59:25 CST 国标问答证据检索别名失败
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户现象：在当前国标文件中提问 `这是什么国标` 时，问答返回“证据不足，无法回答”，验证流程里 `retrieval_validation / evidence_score` 失败。
+
+诊断：
+
+- `这是什么国标` 初始检索结果为空。
+- `这是什么国家标准` 能召回封面 chunk，说明文档内容存在，问题在查询归一化。
+- 原因是检索只做字符 n-gram 和标点/空格归一，`国标` 与文档中的 `国家标准`、`GB/T`、`标准编号`、`标准名称` 没有同义扩展。
+- QA 的 no-answer guard 也基于同一归一化逻辑判断关键业务词覆盖，因此即使后续召回到封面，也需要让 `国标` 与 `国家标准/GB/T` 共享归一化。
+
+处理：
+
+- 在 `app/core/retrieval.py` 的 `normalize_for_retrieval()` 中增加标准类别名扩展：`国标`、`国家标准`、`GB/T`、`GBT`、`标准编号`、`标准号`、`标准名称`。
+- 新增检索测试，确认 `这是什么国标` 能召回封面标准 chunk。
+- 新增 QA 测试，确认 `这是什么国标` 在证据包含 `中华人民共和国国家标准 / GB/T 1568—2008 / 键 技术条件` 时不会触发证据不足策略。
+
+验证：
+
+```text
+.venv/bin/python - <<'PY'
+from app.core.storage import load_document
+from app.core.retrieval import TfidfRetriever
+from app.core.schemas import Chunk
+
+doc_id='GBT1568-2008键技术条件-e724ad081078fa41'
+doc=load_document(doc_id)
+retriever=TfidfRetriever([Chunk(**item) for item in doc['chunks']])
+for item in retriever.search('这是什么国标', top_k=4):
+    print(item['score'], item['chunk_id'], item['page'], item['text'].replace('\n',' | ')[:80])
+PY
+0.6456 c0008 3 GB/T 1568—2008 | 键 技术条件
+0.5002 c0007 2 一一 GB 1568—1979,GB/T 1568—1997。
+0.4752 c0001 1 ICS 21.120.30 | J 18 | 中华人民共和国国家标准 | GB/T 1568—2008 | 代替 GB/T 1568—1997 | 键 技术条件
+
+POST /api/docs/GBT1568-2008键技术条件-e724ad081078fa41/ask
+question=这是什么国标
+mode=llm_grounded
+evidence_score=pass
+llm_judge=pass
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q
+32 passed, 5 warnings
+
+tmux kill-session -t docqa_agent_prototype && tmux new-session -d -s docqa_agent_prototype -c /Users/simon/ai-agents/docqa_agent_prototype './run.sh'
+GET /
+HTTP 200
+```
+
+剩余风险：当前修复覆盖标准身份类问题；如果后续出现行业缩写、产品型号、公式别名等检索失败，需要继续以同义词/查询扩展方式补充，而不是在 QA 阶段编造答案。

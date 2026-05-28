@@ -17,7 +17,29 @@ def normalize_for_retrieval(text: str) -> str:
     """
     text = re.sub(r"\s+", "", text)
     text = re.sub(r"[，。；：、,.!?！？\[\]（）(){}<>《》“”\"'`~|]", "", text)
-    return text.lower()
+    return _expand_domain_terms(text.lower())
+
+
+def _expand_domain_terms(text: str) -> str:
+    """Append deterministic synonyms for common document-standard questions."""
+    additions = []
+    mentions_standard = (
+        "国家标准" in text
+        or "国标" in text
+        or "标准编号" in text
+        or "标准号" in text
+        or "标准名称" in text
+        or "gb/t" in text
+        or "gbt" in text
+        or bool(re.search(r"\bgb\d+", text))
+    )
+    if mentions_standard:
+        additions.append("国家标准国标标准编号标准号标准名称gb/tgbtgb")
+    if "国标" in text:
+        additions.append("国家标准")
+    if "国家标准" in text:
+        additions.append("国标")
+    return text + "".join(additions)
 
 
 class TfidfRetriever:
