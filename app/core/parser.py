@@ -14,6 +14,7 @@ from .ocr import DEFAULT_DPI, render_page, ocr_image
 from .pdf_probe import probe_pdf
 from .schemas import BlockArtifact, EdgeArtifact, ElementArtifact, PageArtifact
 from .storage import doc_dir, load_document, save_document
+from .table_parser import parse_tables
 from .validators import recognition_checks
 
 
@@ -48,7 +49,7 @@ def process_pdf(doc_id: str, pdf_path: Path) -> Dict:
         ]
         manifest = _manifest(doc_id, pdf_path, probe.to_dict(), [], [])
         _write_markdown(root, manifest, [])
-        save_document(doc_id, manifest, [], elements, edges, [], [])
+        save_document(doc_id, manifest, [], elements, edges, [], [], [])
         return load_document(doc_id)
 
     image_dir = root / "images"
@@ -60,6 +61,7 @@ def process_pdf(doc_id: str, pdf_path: Path) -> Dict:
     blocks: List[BlockArtifact] = []
     primary_blocks: List[BlockArtifact] = []
     alternative_blocks: List[BlockArtifact] = []
+    tables: List[Any] = []
 
     def add_edge(
         from_id: str,
@@ -167,14 +169,14 @@ def process_pdf(doc_id: str, pdf_path: Path) -> Dict:
                 {"page_id": page_id, "element_type": item.element_type},
             )
 
-        table_elements = _table_elements(
+        table_region_elements = _table_elements(
             doc_id,
             page_id,
             page_no,
             recognition.table_regions,
             start_index=len(elements) + 1,
         )
-        for item in table_elements:
+        for item in table_region_elements:
             elements.append(item)
             add_edge(page_element_id, item.element_id, "contains", "table_detection.v1", {"page_id": page_id})
             add_edge(page_render_id, item.element_id, "cropped_from", "table_detection.v1", {"bbox": item.bbox or []})
@@ -202,12 +204,38 @@ def process_pdf(doc_id: str, pdf_path: Path) -> Dict:
 
         primary_text = _primary_text_elements(page_elements, ocr_elements, include_unmatched_ocr=page_image_blocks > 0)
         alternative_text = _alternative_text_elements(page_elements, ocr_elements, primary_text)
+        table_result = parse_tables(
+            doc_id=doc_id,
+            page_id=page_id,
+            page_no=page_no,
+            image_path=image_path,
+            image_width=image_width,
+            image_height=image_height,
+            page_element_id=page_element_id,
+            page_render_id=page_render_id,
+            table_regions=table_region_elements,
+            text_candidates=page_elements + ocr_elements,
+            start_element_index=len(elements) + 1,
+            start_block_index=len(blocks) + 1,
+        )
+        elements.extend(table_result.elements)
+        edges.extend(_renumber_edges(table_result.edges, start=len(edges) + 1))
+        tables.extend(table_result.tables)
+        for table in table_result.tables:
+            page_artifact.checks.append(
+                {
+                    "stage": "document_recognition",
+                    "name": "table_structure",
+                    "status": table.status,
+                    "detail": f"表格 {table.table_id} strategy={table.strategy} rows={table.row_count} cols={table.column_count} confidence={table.confidence}",
+                }
+            )
         page_blocks = _build_blocks_from_elements(
             doc_id,
             page_id,
             page_no,
             primary_text,
-            start_index=len(blocks) + 1,
+            start_index=len(blocks) + len(table_result.blocks) + 1,
             role="primary",
         )
         page_alternative_blocks = _build_blocks_from_elements(
@@ -215,12 +243,13 @@ def process_pdf(doc_id: str, pdf_path: Path) -> Dict:
             page_id,
             page_no,
             alternative_text,
-            start_index=len(blocks) + len(page_blocks) + 1,
+            start_index=len(blocks) + len(table_result.blocks) + len(page_blocks) + 1,
             role="alternative",
         )
+        primary_blocks.extend(table_result.blocks)
         primary_blocks.extend(page_blocks)
         alternative_blocks.extend(page_alternative_blocks)
-        for block in page_blocks + page_alternative_blocks:
+        for block in table_result.blocks + page_blocks + page_alternative_blocks:
             blocks.append(block)
             for element_id in block.element_ids:
                 add_edge(
@@ -237,7 +266,7 @@ def process_pdf(doc_id: str, pdf_path: Path) -> Dict:
 
     manifest = _manifest(doc_id, pdf_path, probe.to_dict(), pages, chunks)
     _write_markdown(root, manifest, chunks)
-    save_document(doc_id, manifest, pages, elements, edges, blocks, chunks)
+    save_document(doc_id, manifest, pages, elements, edges, blocks, chunks, tables)
     return load_document(doc_id)
 
 
@@ -260,6 +289,7 @@ def _manifest(doc_id: str, pdf_path: Path, probe: Dict[str, Any], pages: List[Pa
             "edges": "edges.jsonl",
             "blocks": "blocks.jsonl",
             "chunks": "chunks.jsonl",
+            "tables": "tables.jsonl",
             "markdown": "derived/full.md",
             "reviews": "reviews.jsonl",
         },

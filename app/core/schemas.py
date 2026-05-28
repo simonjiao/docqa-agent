@@ -151,6 +151,32 @@ class BlockArtifact:
 
 
 @dataclass
+class TableArtifact:
+    table_id: str
+    doc_id: str
+    page_id: str
+    page_no: int
+    region_element_id: str
+    structure_element_id: str
+    strategy: str
+    bbox: List[int]
+    row_count: int
+    column_count: int
+    headers: List[str]
+    rows: List[Dict[str, Any]]
+    cell_ids: List[str]
+    confidence: float
+    status: str
+    warnings: List[str] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        self.warnings = self.warnings or []
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class Chunk:
     id: str
     doc_id: str

@@ -166,6 +166,9 @@ async function loadPage(pageNo) {
     <div class="table-card" data-bbox="${t.bbox.join(',')}">
       <strong>疑似表格区域：${t.id}</strong>
       <div class="small">bbox=${t.bbox.join(', ')}；原因=${t.reason}</div>
+      ${(t.structured_tables || []).map(table => `
+        <div class="small">结构化：${table.table_id}；${table.status}；${table.strategy}；${table.row_count}x${table.column_count}</div>
+      `).join("")}
     </div>
   `).join("");
   document.querySelectorAll(".table-card").forEach(el => el.onclick = () => {
@@ -199,7 +202,7 @@ async function ask() {
   $("evidenceBox").innerHTML = state.lastEvidence.map(ev => `
     <div class="evidence">
       <strong>${ev.chunk_id}</strong> / 第 ${ev.page} 页 / score=${ev.score} / ${ev.kind}
-      <div class="small">source_types=${(ev.source_types || []).join(", ")}；blocks=${(ev.source_block_ids || []).join(", ")}</div>
+      <div class="small">source_types=${(ev.source_types || []).join(", ")}；blocks=${(ev.source_block_ids || []).join(", ")}；warnings=${(ev.warnings || []).join(", ")}</div>
       <pre>${ev.text}</pre>
     </div>
   `).join("") || "<p class='small'>无检索证据。</p>";

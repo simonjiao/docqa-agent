@@ -54,5 +54,6 @@ class TfidfRetriever:
                 "alternative_block_ids": chunk.alternative_block_ids,
                 "source_group_ids": chunk.source_group_ids,
                 "source_types": chunk.source_types,
+                "warnings": chunk.warnings,
             })
         return results

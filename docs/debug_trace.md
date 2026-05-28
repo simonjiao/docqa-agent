@@ -639,3 +639,40 @@ image_ocr alternative blocks 对表格区域识别质量较差，例如 "asf ww 
 - 同步更新 `docs/architecture.md` 和 `docs/pdf_parsing_refactor_design.md` 的交叉引用，避免形成另一套路线。
 
 验证结果：`rg` 检查关键术语和交叉引用命中预期，`git diff --check` 通过；本次是文档设计变更，不涉及运行时代码。
+
+## 2026-05-28 12:49:35 CST 结构化表格识别实现
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：根据结构化表格识别设计生成 checklist，并完成 checklist；不要折中，不要提前宣布胜利，必须测试。
+
+处理摘要：
+
+- 新增 `docs/table_structure_recognition_checklist.md`，按设计拆出事实源、元素/关系、三类策略、API、测试和提交验收项。
+- 新增 `app/core/table_parser.py`，实现有线表格 grid parser、无线表格 alignment parser、扫描/OCR 低质量表格 cell-level OCR parser。
+- storage/manifest 增加 `tables.jsonl`，但 `elements.jsonl` 和 `edges.jsonl` 仍是事实源。
+- parser 写入 `table_structure`、`table_row`、`table_column`、`table_cell`、`table_line`、`cell_ocr` element，以及结构、候选、block/chunk 追溯边。
+- 生成 `table_markdown` 和 `table_json` 两类 table block，并由 chunker 生成独立 `kind=table` chunk。
+- API 新增 `/api/docs/{doc_id}/tables`、`/api/docs/{doc_id}/pages/{page_no}/tables`、`/api/docs/{doc_id}/tables/{table_id}`；页面识别接口返回结构化表格摘要。
+- 新增 `docs-for-test/sample_table_ruled.pdf`、`sample_table_borderless.pdf`、`sample_table_scanned_low_conf.pdf` 三类 fixture。
+- 新增 `tests/test_table_structure.py` 覆盖三类表格、edge 完整性、table chunk 追溯和 API 读取。
+
+验证命令：
+
+```bash
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q tests/test_table_structure.py
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q
+STORAGE_DIR=$(mktemp -d) .venv/bin/python scripts/evaluate.py --sample
+```
+
+结果摘要：
+
+```text
+tests/test_table_structure.py: 3 passed, 5 warnings
+full pytest: 19 passed, 5 warnings
+evaluate.py --sample completed; all sample cases returned validation checks
+```
+
+补充记录：最终验证时组合命令中使用系统 `python` 读取 `/tmp/docqa_table_eval.json`，本机 shell 返回 `zsh:1: command not found: python`；改用 `.venv/bin/python` 读取同一评估产物成功，确认 5 个 case 均返回验证检查。
+
+剩余风险：规则解析已覆盖三类目标 fixture；真实复杂财报、跨页表格、旋转表格和嵌套表格仍需要后续 golden set 扩展，但当前实现不会把失败结构当作确定答案。

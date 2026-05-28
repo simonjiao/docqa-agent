@@ -90,6 +90,7 @@ def get_page_image(doc_id: str, page_no: int) -> FileResponse:
 @app.get("/api/docs/{doc_id}/pages/{page_no}/recognition")
 def get_page_recognition(doc_id: str, page_no: int) -> Dict[str, Any]:
     doc = load_document(doc_id)
+    page_tables = [table for table in doc.get("tables", []) if table.get("page_no") == page_no]
     for page in doc["pages"]:
         if page["page_no"] == page_no:
             lines = _page_recognition_lines(doc, page_no)
@@ -99,6 +100,11 @@ def get_page_recognition(doc_id: str, page_no: int) -> Dict[str, Any]:
                     "element_id": element["element_id"],
                     "bbox": element.get("bbox") or [0, 0, 0, 0],
                     "reason": element.get("raw_ref", {}).get("reason", "table_detection"),
+                    "structured_tables": [
+                        table
+                        for table in page_tables
+                        if table.get("region_element_id") == element["element_id"]
+                    ],
                 }
                 for element in doc["elements"]
                 if element.get("page_no") == page_no and element.get("element_type") == "table_region"
@@ -112,11 +118,43 @@ def get_page_recognition(doc_id: str, page_no: int) -> Dict[str, Any]:
                     "text": "\n".join(line["text"] for line in lines),
                     "lines": lines,
                     "table_regions": table_regions,
+                    "tables": page_tables,
                     "average_confidence": page["average_ocr_confidence"],
                 },
                 "checks": page.get("checks", []),
             }
     raise HTTPException(status_code=404, detail="Page recognition not found.")
+
+
+@app.get("/api/docs/{doc_id}/tables")
+def list_doc_tables(doc_id: str) -> Dict[str, Any]:
+    doc = load_document(doc_id)
+    return {"items": doc.get("tables", [])}
+
+
+@app.get("/api/docs/{doc_id}/pages/{page_no}/tables")
+def list_page_tables(doc_id: str, page_no: int) -> Dict[str, Any]:
+    doc = load_document(doc_id)
+    return {"items": [table for table in doc.get("tables", []) if table.get("page_no") == page_no]}
+
+
+@app.get("/api/docs/{doc_id}/tables/{table_id}")
+def get_table(doc_id: str, table_id: str) -> Dict[str, Any]:
+    doc = load_document(doc_id)
+    for table in doc.get("tables", []):
+        if table.get("table_id") == table_id:
+            cell_ids = set(table.get("cell_ids", []))
+            source_ids = cell_ids | {table.get("region_element_id"), table.get("structure_element_id")}
+            return {
+                "table": table,
+                "elements": [item for item in doc["elements"] if item.get("element_id") in source_ids],
+                "edges": [
+                    edge
+                    for edge in doc["edges"]
+                    if edge.get("from_id") in source_ids or edge.get("to_id") in source_ids
+                ],
+            }
+    raise HTTPException(status_code=404, detail="Table not found.")
 
 
 def _page_recognition_lines(doc: Dict[str, Any], page_no: int) -> list[dict[str, Any]]:
@@ -134,6 +172,7 @@ def _page_recognition_lines(doc: Dict[str, Any], page_no: int) -> list[dict[str,
         }
         for block in doc["blocks"]
         if block.get("page_no") == page_no and block.get("role", "primary") == "primary"
+        and "table_json" not in set(block.get("source_types", []))
     ]
     if block_lines:
         return block_lines

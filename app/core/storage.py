@@ -6,7 +6,7 @@ import json
 import os
 import shutil
 
-from .schemas import BlockArtifact, Chunk, EdgeArtifact, ElementArtifact, PageArtifact
+from .schemas import BlockArtifact, Chunk, EdgeArtifact, ElementArtifact, PageArtifact, TableArtifact
 
 
 def storage_root() -> Path:
@@ -81,6 +81,7 @@ def save_document(
     edges: List[EdgeArtifact],
     blocks: List[BlockArtifact],
     chunks: List[Chunk],
+    tables: List[TableArtifact] | None = None,
 ) -> None:
     root = doc_dir(doc_id)
     write_json(root / "manifest.json", manifest)
@@ -89,6 +90,7 @@ def save_document(
     write_jsonl(root / "edges.jsonl", edges)
     write_jsonl(root / "blocks.jsonl", blocks)
     write_jsonl(root / "chunks.jsonl", chunks)
+    write_jsonl(root / "tables.jsonl", tables or [])
 
 
 def load_document(doc_id: str) -> Dict[str, Any]:
@@ -100,6 +102,7 @@ def load_document(doc_id: str) -> Dict[str, Any]:
         "edges": read_jsonl(root / "edges.jsonl"),
         "blocks": read_jsonl(root / "blocks.jsonl"),
         "chunks": read_jsonl(root / "chunks.jsonl"),
+        "tables": read_jsonl(root / "tables.jsonl"),
     }
 
 
