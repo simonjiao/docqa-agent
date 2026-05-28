@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Protocol, Set
 import asyncio
 import inspect
+import json
 import os
 import re
 import shlex
@@ -172,12 +173,47 @@ def _format_evidence(evidence: List[Dict]) -> str:
         return "（无可用证据）"
     lines = []
     for idx, item in enumerate(evidence, start=1):
-        text = re.sub(r"\s+", " ", item.get("text", "")).strip()
-        if len(text) > 900:
-            text = text[:900] + "..."
+        text = _format_evidence_item_text(item)
         source = f"第{item.get('page', '?')}页"
         lines.append(f"[{idx}] {source}\n{text}")
     return "\n\n".join(lines)
+
+
+def _format_evidence_item_text(item: Dict) -> str:
+    text = item.get("text", "")
+    source_types = item.get("source_types", []) or []
+    if item.get("kind") == "table" and "table_json" in source_types:
+        formatted = _format_table_json_evidence(text)
+        if formatted:
+            return formatted
+    text = re.sub(r"[ \t]+", " ", str(text)).strip()
+    limit = 1800 if item.get("kind") == "table" else 900
+    if len(text) > limit:
+        text = text[:limit] + "..."
+    return text
+
+
+def _format_table_json_evidence(text: str) -> str:
+    try:
+        table = json.loads(text)
+    except (TypeError, ValueError):
+        return ""
+    headers = table.get("headers") or []
+    rows = table.get("rows") or []
+    if not headers or not rows:
+        return ""
+    lines = [
+        (
+            f"表格 {table.get('table_id', '')}；status={table.get('status', '')}；"
+            f"strategy={table.get('strategy', '')}；{table.get('row_count', '?')}x{table.get('column_count', '?')}"
+        ),
+        "| " + " | ".join(str(header) for header in headers) + " |",
+        "| " + " | ".join("---" for _ in headers) + " |",
+    ]
+    for row in rows:
+        cells = row.get("cells") or {}
+        lines.append("| " + " | ".join(str(cells.get(header, "")) for header in headers) + " |")
+    return "\n".join(lines)
 
 
 def _system_prompt() -> str:

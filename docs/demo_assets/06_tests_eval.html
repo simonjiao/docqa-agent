@@ -1,0 +1,27 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>测试评估</title><style>
+*{box-sizing:border-box} body{margin:0;background:#f3f6fb;color:#162033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"PingFang SC","Microsoft YaHei",sans-serif} .page{width:100%;max-width:1440px;min-height:900px;margin:0 auto;padding:38px 44px;background:#f7f9fc} .hero{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;border-bottom:3px solid #1f5ecf;padding-bottom:16px} h1{margin:0;font-size:34px;letter-spacing:0} h2{margin:0 0 14px;font-size:24px} h3{margin:0 0 8px;font-size:18px}.subtitle{font-size:18px;color:#50627e;margin-top:8px}.pill{display:inline-block;border-radius:999px;background:#e7efff;color:#174a9c;padding:7px 12px;font-weight:700;margin:0 8px 8px 0}.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px}.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.card{min-width:0;background:white;border:1px solid #d7e0ee;border-radius:8px;padding:18px;box-shadow:0 1px 2px rgba(12,24,44,.04)}.terminal{background:#101827;color:#e7edf7;border-radius:8px;padding:18px;font:18px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap}.small{color:#5a6b84;font-size:14px}.metric{font-size:30px;font-weight:800;color:#1d5fd1;margin:6px 0}.doc-img{width:100%;max-height:690px;object-fit:contain;border:1px solid #d7e0ee;background:white}.lines{max-height:670px;overflow:hidden}.line{border-left:4px solid #2b6fe8;background:#f8fbff;margin:0 0 8px;padding:8px 10px;font-size:15px}.table-wrap{overflow:hidden;border:1px solid #d7e0ee;border-radius:8px;background:white}table{width:100%;border-collapse:collapse;font-size:15px}th,td{border:1px solid #cfd8e8;padding:8px;text-align:left;vertical-align:top}th{background:#eaf1ff;color:#143d82}.qa-card{min-height:240px}.qa-card h3{display:flex;align-items:center;gap:8px}.answer{font-size:16px;line-height:1.5}.evidence-list{font-size:13px;color:#4b5f7a;padding-left:18px}.badge{display:inline-block;border-radius:6px;padding:4px 7px;margin:3px;background:#edf2f7;color:#31435f;font-size:12px;font-weight:700}.badge.pass{background:#e4f6eb;color:#14783d}.badge.pending{background:#fff5d7;color:#8a6200}.badge.fail{background:#fde8e8;color:#a32020}.badge.warn{background:#fff0df;color:#9a5a00}.tag-table{background:#dbebff;color:#174a9c}.tag-no{background:#fde8e8;color:#9a1f1f}.two-col{display:grid;grid-template-columns:minmax(0,55%) minmax(0,45%);gap:20px}.code{background:#101827;color:#e7edf7;border-radius:8px;padding:16px;font:14px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:710px;overflow:hidden}.callout{background:#edf6ff;border:1px solid #b9d9ff;border-radius:8px;padding:12px 14px;margin-bottom:14px}.checks{display:flex;flex-wrap:wrap;margin:8px 0}.section-note{font-size:17px;color:#44566e;line-height:1.55}.footer{position:fixed;right:44px;bottom:24px;color:#63748e;font-size:13px}.em{font-weight:800;color:#1d5fd1}
+</style></head><body><div class="page">
+<div class="hero"><div><h1>6. 测试与评估脚本</h1><div class="subtitle">单元测试覆盖解析、检索、QA、自检；评估脚本覆盖正文、表格、拒答。</div></div><span class="pill">预计演示 1 分钟</span></div>
+<div class="grid"><div class="card"><h2>pytest</h2><div class="code">..........................................                               [100%]
+=============================== warnings summary ===============================
+&lt;frozen importlib._bootstrap&gt;:488
+&lt;frozen importlib._bootstrap&gt;:488
+  &lt;frozen importlib._bootstrap&gt;:488: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+&lt;frozen importlib._bootstrap&gt;:488
+&lt;frozen importlib._bootstrap&gt;:488
+  &lt;frozen importlib._bootstrap&gt;:488: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+&lt;frozen importlib._bootstrap&gt;:488
+  &lt;frozen importlib._bootstrap&gt;:488: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+42 passed, 5 warnings in 57.21s
+</div></div><div class="card"><h2>scripts/evaluate.py</h2><div class="code">$ .venv/bin/python scripts/evaluate.py --pdf 'data/sample/GBT 1568-2008 键 技术条件.pdf'
+
+q1_scope | 正文问题 | pages=[3, 4, 2, 3] | checks=evidence_score:pass,answer_evidence_overlap:pass,no_answer_guard:pass,llm_judge:pass,human_review:pending
+q2_strength | 正文问题 | pages=[3, 3, 3, 3] | checks=evidence_score:pass,answer_evidence_overlap:pass,no_answer_guard:pass,llm_judge:pass,human_review:pending
+q3_table | 表格问题 | pages=[3, 4, 3, 4] | checks=evidence_score:pass,answer_evidence_overlap:pass,no_answer_guard:pass,llm_judge:pass,human_review:pending
+q4_mark | 正文列表问题 | pages=[4, 4, 3, 3] | checks=evidence_score:pass,answer_evidence_overlap:pass,no_answer_guard:pass,llm_judge:pass,human_review:pending
+q5_no_answer | 无答案问题 | pages=[3, 2, 1, 1] | checks=evidence_score:pass,specific_term_guard:pass,answer_evidence_overlap:pass,no_answer_guard:pass,llm_judge:pass,human_review:pending</div></div></div>
+<div class="footer">DocQA 演示材料 / GBT1568-2008键技术条件-e724ad081078fa41</div></div></body></html>

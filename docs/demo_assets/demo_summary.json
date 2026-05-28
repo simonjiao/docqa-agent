@@ -1,0 +1,341 @@
+{
+  "doc_id": "GBT1568-2008键技术条件-e724ad081078fa41",
+  "html_pages": [
+    "01_startup_flow.html",
+    "02_pdf_body.html",
+    "03_pdf_table.html",
+    "04_qa_results.html",
+    "05_sources_checks.html",
+    "06_tests_eval.html"
+  ],
+  "qa_cases": [
+    {
+      "id": "q1_standard",
+      "label": "标准识别",
+      "question": "这是什么国标？",
+      "mode": "llm_grounded",
+      "evidence": [
+        [
+          "c0007",
+          2,
+          0.5288,
+          "text"
+        ],
+        [
+          "c0001",
+          1,
+          0.5271,
+          "text"
+        ],
+        [
+          "c0030",
+          4,
+          0.4839,
+          "text"
+        ],
+        [
+          "c0018",
+          3,
+          0.4165,
+          "text"
+        ]
+      ],
+      "checks": [
+        [
+          "evidence_score",
+          "pass"
+        ],
+        [
+          "answer_evidence_overlap",
+          "pass"
+        ],
+        [
+          "no_answer_guard",
+          "pass"
+        ],
+        [
+          "llm_judge",
+          "pass"
+        ],
+        [
+          "human_review",
+          "pending"
+        ]
+      ]
+    },
+    {
+      "id": "q2_scope",
+      "label": "正文范围",
+      "question": "本标准规定了哪些内容？",
+      "mode": "llm_grounded",
+      "evidence": [
+        [
+          "c0009",
+          3,
+          0.3398,
+          "text"
+        ],
+        [
+          "c0006",
+          2,
+          0.1117,
+          "text"
+        ],
+        [
+          "c0010",
+          3,
+          0.1028,
+          "text"
+        ],
+        [
+          "c0033",
+          4,
+          0.1025,
+          "text"
+        ]
+      ],
+      "checks": [
+        [
+          "evidence_score",
+          "pass"
+        ],
+        [
+          "answer_evidence_overlap",
+          "pass"
+        ],
+        [
+          "no_answer_guard",
+          "pass"
+        ],
+        [
+          "llm_judge",
+          "pass"
+        ],
+        [
+          "human_review",
+          "pending"
+        ]
+      ]
+    },
+    {
+      "id": "q3_strength",
+      "label": "技术要求",
+      "question": "键的抗拉强度要求是多少？",
+      "mode": "llm_grounded",
+      "evidence": [
+        [
+          "c0013",
+          3,
+          0.454,
+          "text"
+        ],
+        [
+          "c0025",
+          3,
+          0.1343,
+          "text"
+        ],
+        [
+          "c0012",
+          3,
+          0.0596,
+          "text"
+        ],
+        [
+          "c0009",
+          3,
+          0.0312,
+          "text"
+        ]
+      ],
+      "checks": [
+        [
+          "evidence_score",
+          "pass"
+        ],
+        [
+          "answer_evidence_overlap",
+          "pass"
+        ],
+        [
+          "no_answer_guard",
+          "pass"
+        ],
+        [
+          "llm_judge",
+          "pass"
+        ],
+        [
+          "human_review",
+          "pending"
+        ]
+      ]
+    },
+    {
+      "id": "q4_table",
+      "label": "表格问题",
+      "question": "表1中检查项目有哪些？",
+      "mode": "llm_grounded",
+      "evidence": [
+        [
+          "c0027",
+          4,
+          0.2616,
+          "table"
+        ],
+        [
+          "c0028",
+          4,
+          0.2335,
+          "table"
+        ],
+        [
+          "c0026",
+          3,
+          0.1593,
+          "text"
+        ],
+        [
+          "c0020",
+          3,
+          0.0593,
+          "text"
+        ]
+      ],
+      "checks": [
+        [
+          "evidence_score",
+          "pass"
+        ],
+        [
+          "answer_evidence_overlap",
+          "pass"
+        ],
+        [
+          "no_answer_guard",
+          "pass"
+        ],
+        [
+          "llm_judge",
+          "pass"
+        ],
+        [
+          "human_review",
+          "pending"
+        ]
+      ]
+    },
+    {
+      "id": "q5_no_answer",
+      "label": "无答案问题",
+      "question": "该标准是否规定电机噪声测试？",
+      "mode": "llm_grounded_refusal",
+      "evidence": [
+        [
+          "c0003",
+          2,
+          0.0945,
+          "text"
+        ],
+        [
+          "c0001",
+          1,
+          0.0696,
+          "text"
+        ],
+        [
+          "c0002",
+          1,
+          0.0615,
+          "text"
+        ],
+        [
+          "c0030",
+          4,
+          0.0596,
+          "text"
+        ]
+      ],
+      "checks": [
+        [
+          "evidence_score",
+          "pass"
+        ],
+        [
+          "specific_term_guard",
+          "pass"
+        ],
+        [
+          "answer_evidence_overlap",
+          "pass"
+        ],
+        [
+          "no_answer_guard",
+          "pass"
+        ],
+        [
+          "llm_judge",
+          "pass"
+        ],
+        [
+          "human_review",
+          "pending"
+        ]
+      ]
+    },
+    {
+      "id": "q6_mark",
+      "label": "列表问题",
+      "question": "包装箱或盒外表面应有哪些标志？",
+      "mode": "llm_grounded",
+      "evidence": [
+        [
+          "c0033",
+          4,
+          0.2851,
+          "text"
+        ],
+        [
+          "c0032",
+          4,
+          0.1113,
+          "text"
+        ],
+        [
+          "c0009",
+          3,
+          0.0409,
+          "text"
+        ],
+        [
+          "c0014",
+          3,
+          0.0334,
+          "text"
+        ]
+      ],
+      "checks": [
+        [
+          "evidence_score",
+          "pass"
+        ],
+        [
+          "answer_evidence_overlap",
+          "pass"
+        ],
+        [
+          "no_answer_guard",
+          "pass"
+        ],
+        [
+          "llm_judge",
+          "pass"
+        ],
+        [
+          "human_review",
+          "pending"
+        ]
+      ]
+    }
+  ]
+}

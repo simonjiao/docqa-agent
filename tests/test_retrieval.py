@@ -96,3 +96,73 @@ def test_retriever_prioritizes_current_standard_release_date():
 
     assert retriever.search("哪一年发布的", top_k=1)[0]["chunk_id"] == "release"
     assert retriever.search("发布日期", top_k=1)[0]["chunk_id"] == "release"
+
+
+def test_retriever_boosts_table_chunks_for_table_questions():
+    chunks = [
+        Chunk(
+            id="body-aql",
+            doc_id="d",
+            page=3,
+            text="键的检查项目和合格质量水平见表 1，样本大小按 GB/T 2828.1 抽取。",
+            source_block_ids=["body-block"],
+            alternative_block_ids=[],
+            source_group_ids=[],
+            source_types=["image_ocr"],
+        ),
+        Chunk(
+            id="table-1",
+            doc_id="d",
+            page=4,
+            kind="table",
+            text=(
+                "| 检查 项 目 | 平 键 | col_3 | col_4 |\n"
+                "| --- | --- | --- | --- |\n"
+                "| 键 宽 | 1.0 |  |  |\n"
+                "| 键 高 | 2.5 |  |  |\n"
+            ),
+            source_block_ids=["table-block"],
+            alternative_block_ids=[],
+            source_group_ids=[],
+            source_types=["table_cell", "table_markdown", "table_structure"],
+        ),
+    ]
+
+    result = TfidfRetriever(chunks).search("表1中检查项目有哪些？", top_k=1)
+
+    assert result[0]["chunk_id"] == "table-1"
+    assert result[0]["kind"] == "table"
+
+
+def test_retriever_does_not_treat_surface_as_table_query():
+    chunks = [
+        Chunk(
+            id="marks",
+            doc_id="d",
+            page=4,
+            text="包装箱、盒等外表面应有制造厂名、产品名称、产品数量或净重等标志。",
+            source_block_ids=["marks-block"],
+            alternative_block_ids=[],
+            source_group_ids=[],
+            source_types=["image_ocr"],
+        ),
+        Chunk(
+            id="table-1",
+            doc_id="d",
+            page=4,
+            kind="table",
+            text=(
+                "| 检查 项 目 | 平 键 |\n"
+                "| --- | --- |\n"
+                "| 键 宽 | 1.0 |\n"
+            ),
+            source_block_ids=["table-block"],
+            alternative_block_ids=[],
+            source_group_ids=[],
+            source_types=["table_cell", "table_markdown", "table_structure"],
+        ),
+    ]
+
+    result = TfidfRetriever(chunks).search("包装箱或盒外表面应有哪些标志？", top_k=1)
+
+    assert result[0]["chunk_id"] == "marks"

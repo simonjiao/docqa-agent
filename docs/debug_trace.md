@@ -1520,3 +1520,40 @@ row 8: 1 : 100 斜 度 / 1.5
 当前结论：结构从原来的 4 列提升到 8 个逻辑列，边框噪声明显减少，简单中文和数字已可用；仍保留 `needs_review`，不对复杂符号和低置信表头做推断补齐。
 
 剩余风险：`半圆键/楔键` 等合并表头仍有 OCR 不确定项，`b/h/L/d1` 这类变量符号可能被识别为近似字符或留空。后续如需继续提升，应加入合并表头 row-span 恢复或国标外置表格规则。
+
+## 2026-05-28 16:16:06 CST 演示材料生成与表格问答检索修复
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：检查并生成 5-10 分钟演示材料，覆盖启动、PDF 正文/表格解析、至少 5 个问答、来源引用、自检结果、测试或评估脚本输出。
+
+诊断：
+
+- 当前 GB/T 样本文档第 4 页表格已生成 `table_markdown` 和 `table_json` chunk，但表格问法会被正文中的 `AQL/检查项目` 片段抢占排序。
+- `table_json` 作为证据进入 LLM prompt 时会被通用 900 字截断，LLM 看不到完整 rows，导致表格问题回答不完整。
+- 问题 `包装箱或盒外表面应有哪些标志？` 中的 `表面` 不能被误判为表格意图。
+- 演示 QA 过程中出现一次 LLM 请求超过 75 秒未返回；重试后成功，说明外部 LLM 延迟仍是演示风险。
+
+处理：
+
+- 在 `app/core/retrieval.py` 增加表格意图加权，仅匹配 `表1/表一/表格/AQL/检查项目/合格质量水平` 等明确表格查询，不匹配普通词 `表面`。
+- 在 `app/core/qa.py` 将 `table_json` 证据转换为紧凑 Markdown 表格后再进入 LLM prompt，避免行数据被 JSON 前缀截断。
+- 生成演示材料到 `docs/demo_materials.md` 和 `docs/demo_assets/`，截图包括启动、正文、表格、问答、证据自检、测试评估。
+
+验证：
+
+```text
+.venv/bin/pytest -q tests/test_retrieval.py tests/test_qa_and_validators.py
+13 passed
+
+.venv/bin/pytest -q
+42 passed, 5 warnings in 57.21s
+
+.venv/bin/python scripts/evaluate.py --pdf 'data/sample/GBT 1568-2008 键 技术条件.pdf'
+q1_scope/q2_strength/q3_table/q4_mark/q5_no_answer 均返回 pass 自检结果
+
+GET /
+HTTP 200
+```
+
+剩余风险：LLM 服务偶发慢响应会影响现场演示节奏；建议演示时使用已生成的 `docs/demo_assets/qa/*.json` 和截图作为兜底材料，同时保留实时问答演示。

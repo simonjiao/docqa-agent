@@ -1,4 +1,5 @@
 import pytest
+import json
 
 from app.core.qa import LLMConfigurationError, build_answer
 from app.core.validators import answer_self_checks, recognition_checks
@@ -112,6 +113,42 @@ def test_build_answer_defaults_ellipsis_to_current_document():
     assert result["mode"] == "llm_grounded"
     assert "默认指当前文档或当前标准" in llm.system_prompt
     assert "不要因为问题省略" in llm.user_prompt
+
+
+def test_build_answer_formats_table_json_for_llm_prompt():
+    table = {
+        "table_id": "p0004-t0001",
+        "status": "needs_review",
+        "strategy": "scanned_ocr_table",
+        "row_count": 3,
+        "column_count": 2,
+        "headers": ["检查 项 目", "平 键"],
+        "rows": [
+            {"cells": {"检查 项 目": "键 宽", "平 键": "1.0"}},
+            {"cells": {"检查 项 目": "键 高", "平 键": "2.5"}},
+        ],
+    }
+    evidence = [
+        {
+            "chunk_id": "table-json",
+            "page": 4,
+            "score": 0.25,
+            "kind": "table",
+            "text": json.dumps(table, ensure_ascii=False),
+            "source_block_ids": ["table-block"],
+            "alternative_block_ids": [],
+            "source_group_ids": [],
+            "source_types": ["table_cell", "table_json", "table_structure"],
+            "warnings": ["table_needs_review"],
+        }
+    ]
+    llm = FakeLLM("根据第4页表格，检查项目包括键宽和键高。")
+
+    result = build_answer("表1中检查项目有哪些？", evidence, llm_client=llm)
+
+    assert result["mode"] == "llm_grounded"
+    assert "表格 p0004-t0001" in llm.user_prompt
+    assert "| 键 高 | 2.5 |" in llm.user_prompt
 
 
 def test_answer_checks_fail_when_score_low():

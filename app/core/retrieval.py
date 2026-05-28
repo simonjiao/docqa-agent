@@ -91,9 +91,6 @@ class TfidfRetriever:
 
 def _metadata_query_boost(query: str, chunk: Chunk) -> float:
     intent = _metadata_query_intent(query)
-    if not intent:
-        return 0.0
-
     text = re.sub(r"\s+", "", chunk.text)
     readable_text = re.sub(r"\s+", " ", chunk.text)
     boost = 0.0
@@ -112,6 +109,7 @@ def _metadata_query_boost(query: str, chunk: Chunk) -> float:
 
     if chunk.page <= 2 and any(marker in text for marker in ["国家标准", "标准化管理委员会", "质量监督检验检疫"]):
         boost += 0.03
+    boost += _table_query_boost(query, chunk, text)
     return boost
 
 
@@ -123,3 +121,24 @@ def _metadata_query_intent(query: str) -> str:
     if "实施" in compact and date_ask:
         return "implementation_date"
     return ""
+
+
+def _table_query_boost(query: str, chunk: Chunk, compact_chunk_text: str) -> float:
+    compact_query = re.sub(r"\s+", "", query).lower()
+    table_intent = (
+        bool(re.search(r"表(?:\d+|[一二三四五六七八九十])", compact_query))
+        or "表格" in compact_query
+        or "aql" in compact_query
+        or "检查项目" in compact_query
+        or "合格质量水平" in compact_query
+    )
+    if not table_intent or chunk.kind != "table":
+        return 0.0
+
+    boost = 0.16
+    table_terms = ["检查项目", "键宽", "键高", "键长", "直径", "平行度", "斜度", "aql"]
+    overlap = sum(1 for term in table_terms if term in compact_query and term in compact_chunk_text.lower())
+    boost += min(0.12, overlap * 0.04)
+    if "table_markdown" in chunk.source_types:
+        boost += 0.03
+    return boost

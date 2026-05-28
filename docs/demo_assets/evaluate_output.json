@@ -1,0 +1,257 @@
+{
+  "doc_id": "GBT1568-2008键技术条件-e724ad081078fa41",
+  "probe": {
+    "pdf_type": "scan_pdf",
+    "pages": 4,
+    "text_chars": 0,
+    "image_blocks": 4,
+    "strategy": "render_pages_then_ocr",
+    "notes": [
+      "PDF has little/no text layer and image blocks; use OCR."
+    ],
+    "pdf_type_candidates": [
+      "scan_pdf"
+    ],
+    "has_text_layer": false,
+    "has_hidden_text": false,
+    "has_images": true,
+    "has_forms": false,
+    "has_vector_drawings": false,
+    "is_encrypted": false,
+    "permission": {
+      "requires_password": false,
+      "authenticated": true,
+      "allows_text_extraction": true,
+      "allows_rendering": true,
+      "action": "parse"
+    }
+  },
+  "cases": [
+    {
+      "id": "q1_scope",
+      "question": "本标准规定了什么范围？",
+      "expect": "正文问题",
+      "answer": "根据本标准第3页第1节“范围”的规定：\n\n**本标准规定了除花键外的各种键的技术要求、验收检查、标志与包装。**（来源：第3页）",
+      "evidence_pages": [
+        3,
+        4,
+        2,
+        3
+      ],
+      "checks": [
+        {
+          "stage": "retrieval_validation",
+          "name": "evidence_score",
+          "status": "pass",
+          "detail": "最高检索分数 0.3678，阈值 0.0550。"
+        },
+        {
+          "stage": "answer_grounding",
+          "name": "answer_evidence_overlap",
+          "status": "pass",
+          "detail": "答案字符可由证据覆盖比例约 0.80。"
+        },
+        {
+          "stage": "answer_policy",
+          "name": "no_answer_guard",
+          "status": "pass",
+          "detail": "证据不足时应拒答；证据充分时应给出页码/片段。"
+        },
+        {
+          "stage": "llm_validation",
+          "name": "llm_judge",
+          "status": "pass",
+          "detail": "已通过 mini-agent OpenAI-compatible LLM 组织答复；model=MiniMax-M2.7；事实来源限制为检索证据。"
+        },
+        {
+          "stage": "human_validation",
+          "name": "human_review",
+          "status": "pending",
+          "detail": "前端提供人工通过/退回入口，记录问题、答案、证据和复核意见。"
+        }
+      ]
+    },
+    {
+      "id": "q2_strength",
+      "question": "键的抗拉强度要求是多少？",
+      "expect": "正文问题",
+      "answer": "根据检索证据，键的抗拉强度要求为：\n\n**键的抗拉强度应大于等于 590 MPa。**（第3页，证据[1]）",
+      "evidence_pages": [
+        3,
+        3,
+        3,
+        3
+      ],
+      "checks": [
+        {
+          "stage": "retrieval_validation",
+          "name": "evidence_score",
+          "status": "pass",
+          "detail": "最高检索分数 0.4540，阈值 0.0550。"
+        },
+        {
+          "stage": "answer_grounding",
+          "name": "answer_evidence_overlap",
+          "status": "pass",
+          "detail": "答案字符可由证据覆盖比例约 0.69。"
+        },
+        {
+          "stage": "answer_policy",
+          "name": "no_answer_guard",
+          "status": "pass",
+          "detail": "证据不足时应拒答；证据充分时应给出页码/片段。"
+        },
+        {
+          "stage": "llm_validation",
+          "name": "llm_judge",
+          "status": "pass",
+          "detail": "已通过 mini-agent OpenAI-compatible LLM 组织答复；model=MiniMax-M2.7；事实来源限制为检索证据。"
+        },
+        {
+          "stage": "human_validation",
+          "name": "human_review",
+          "status": "pending",
+          "detail": "前端提供人工通过/退回入口，记录问题、答案、证据和复核意见。"
+        }
+      ]
+    },
+    {
+      "id": "q3_table",
+      "question": "表 1 中合格质量水平 AQL 和哪些检查项目有关？",
+      "expect": "表格问题",
+      "answer": "根据检索证据，表1中的合格质量水平AQL与以下检查项目有关（第3-4页）：\n\n1. **键宽（6）** — 普通平键和薄型平键的AQL为1.0，半圆键（普通）为1.5\n2. **键高** — 平键和半圆键的AQL为2.5\n3. **键长** — 平键（普通）和半圆键（普通）的AQL为4\n4. **直径d** — 仅薄型平键涉及，AQL为2.5\n5. **键宽平行度** — 仅普通平键涉及，AQL为1.5\n6. **1:100斜度** — 仅半圆键（薄型）涉及，AQL为1.5\n\n这些检查项目及其对应的AQL值构成了键尺寸检查的质量控制标准，不同类型的键（如平键的普通/导向/薄型，以及半圆键的普通/薄型/钩头）适用不同的AQL要求。",
+      "evidence_pages": [
+        3,
+        4,
+        3,
+        4
+      ],
+      "checks": [
+        {
+          "stage": "retrieval_validation",
+          "name": "evidence_score",
+          "status": "pass",
+          "detail": "最高检索分数 0.3009，阈值 0.0550。"
+        },
+        {
+          "stage": "answer_grounding",
+          "name": "answer_evidence_overlap",
+          "status": "pass",
+          "detail": "答案字符可由证据覆盖比例约 0.62。"
+        },
+        {
+          "stage": "answer_policy",
+          "name": "no_answer_guard",
+          "status": "pass",
+          "detail": "证据不足时应拒答；证据充分时应给出页码/片段。"
+        },
+        {
+          "stage": "llm_validation",
+          "name": "llm_judge",
+          "status": "pass",
+          "detail": "已通过 mini-agent OpenAI-compatible LLM 组织答复；model=MiniMax-M2.7；事实来源限制为检索证据。"
+        },
+        {
+          "stage": "human_validation",
+          "name": "human_review",
+          "status": "pending",
+          "detail": "前端提供人工通过/退回入口，记录问题、答案、证据和复核意见。"
+        }
+      ]
+    },
+    {
+      "id": "q4_mark",
+      "question": "包装箱或盒外表面应有哪些标志？",
+      "expect": "正文列表问题",
+      "answer": "根据证据[1]，包装箱或盒外表面应有以下标志或标签：\n\na) 制造厂名；\nb) 产品名称；\nc) 产品标准规定的标记；\nd) 产品数量或净重。\n\n（第4页）",
+      "evidence_pages": [
+        4,
+        4,
+        3,
+        3
+      ],
+      "checks": [
+        {
+          "stage": "retrieval_validation",
+          "name": "evidence_score",
+          "status": "pass",
+          "detail": "最高检索分数 0.2851，阈值 0.0550。"
+        },
+        {
+          "stage": "answer_grounding",
+          "name": "answer_evidence_overlap",
+          "status": "pass",
+          "detail": "答案字符可由证据覆盖比例约 0.75。"
+        },
+        {
+          "stage": "answer_policy",
+          "name": "no_answer_guard",
+          "status": "pass",
+          "detail": "证据不足时应拒答；证据充分时应给出页码/片段。"
+        },
+        {
+          "stage": "llm_validation",
+          "name": "llm_judge",
+          "status": "pass",
+          "detail": "已通过 mini-agent OpenAI-compatible LLM 组织答复；model=MiniMax-M2.7；事实来源限制为检索证据。"
+        },
+        {
+          "stage": "human_validation",
+          "name": "human_review",
+          "status": "pending",
+          "detail": "前端提供人工通过/退回入口，记录问题、答案、证据和复核意见。"
+        }
+      ]
+    },
+    {
+      "id": "q5_no_answer",
+      "question": "该标准是否规定了电机噪声测试？",
+      "expect": "无答案问题",
+      "answer": "**没有找到足够依据。**\n\n根据提供的证据，当前标准（GB/T 1568—2008《键 技术条件》）是关于机械零件中各种键的技术要求、验收检查、标志与包装的规定[1][3]，与电机噪声测试无关，证据中未提及任何电机或噪声测试相关内容。",
+      "evidence_pages": [
+        3,
+        2,
+        1,
+        1
+      ],
+      "checks": [
+        {
+          "stage": "retrieval_validation",
+          "name": "evidence_score",
+          "status": "pass",
+          "detail": "最高检索分数 0.1300，阈值 0.0550。"
+        },
+        {
+          "stage": "answer_policy",
+          "name": "specific_term_guard",
+          "status": "pass",
+          "detail": "问题中的关键业务词未被证据覆盖，已要求 LLM 基于证据不足拒答。"
+        },
+        {
+          "stage": "answer_grounding",
+          "name": "answer_evidence_overlap",
+          "status": "pass",
+          "detail": "答案字符可由证据覆盖比例约 0.52。"
+        },
+        {
+          "stage": "answer_policy",
+          "name": "no_answer_guard",
+          "status": "pass",
+          "detail": "证据不足时应拒答；证据充分时应给出页码/片段。"
+        },
+        {
+          "stage": "llm_validation",
+          "name": "llm_judge",
+          "status": "pass",
+          "detail": "已通过 mini-agent OpenAI-compatible LLM 组织答复；model=MiniMax-M2.7；事实来源限制为检索证据。"
+        },
+        {
+          "stage": "human_validation",
+          "name": "human_review",
+          "status": "pending",
+          "detail": "前端提供人工通过/退回入口，记录问题、答案、证据和复核意见。"
+        }
+      ]
+    }
+  ]
+}

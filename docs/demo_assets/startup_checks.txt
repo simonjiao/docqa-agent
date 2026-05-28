@@ -1,0 +1,8 @@
+时间: 2026-05-28 16:10:35 CST
+工作目录: /Users/simon/ai-agents/docqa_agent_prototype
+Python: Python 3.13.1
+启动入口: ./run.sh -> uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+服务会话: docqa_agent_prototype: 1 windows (created Thu May 28 15:13:33 2026)
+健康检查: GET / HTTP 200
+样本文档: data/sample/GBT 1568-2008 键 技术条件.pdf
+doc_id: GBT1568-2008键技术条件-e724ad081078fa41
