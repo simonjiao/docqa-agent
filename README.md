@@ -94,6 +94,8 @@ docs/
   architecture.md         架构说明
   validation_workflow.md  验证流程说明
   demo_script.md          演示脚本
+  demo_materials.md       5-10 分钟演示材料入口
+  demo_assets/            演示截图、QA 返回、测试与评估输出
   pdf_element_graph_implementation_checklist.md  元素图谱实现清单
   debug_trace.md          调试过程跟踪记录
 docs-for-test/
@@ -152,7 +154,31 @@ AGENTS.md                 项目协作规则与调试跟踪要求
 .venv/bin/python scripts/evaluate.py --sample
 ```
 
-## 8. 当前取舍与限制
+## 8. 演示材料与截图
+
+完整 5-10 分钟演示材料入口：
+
+- [docs/demo_materials.md](docs/demo_materials.md)
+
+截图和原始输出都保存在 `docs/demo_assets/`。每张截图对应的演示内容如下：
+
+| 内容 | 说明 | 路径 |
+| --- | --- | --- |
+| 部署 / 启动完整流程 | 展示 `.venv/bin/python`、`./run.sh`、服务会话、健康检查和样本文档信息。 | [docs/demo_assets/01_startup_flow.png](docs/demo_assets/01_startup_flow.png) |
+| PDF 正文解析结果 | 展示第 3 页原图、OCR 置信度、正文块和条款识别结果。 | [docs/demo_assets/02_pdf_body.png](docs/demo_assets/02_pdf_body.png) |
+| PDF 表格解析结果 | 展示第 4 页表 1 原图、结构化表格、`needs_review` 状态和表格置信度。 | [docs/demo_assets/03_pdf_table.png](docs/demo_assets/03_pdf_table.png) |
+| 问答结果 | 展示 6 个问题的回答，包含正文问题、表格问题和无答案拒答问题。 | [docs/demo_assets/04_qa_results.png](docs/demo_assets/04_qa_results.png) |
+| 来源引用和自检结果 | 展示表格问题与无答案问题的证据 chunk、页码、检索分和自检状态。 | [docs/demo_assets/05_sources_checks.png](docs/demo_assets/05_sources_checks.png) |
+| 测试与评估脚本结果 | 展示 `pytest` 和 `scripts/evaluate.py` 的运行结果。 | [docs/demo_assets/06_tests_eval.png](docs/demo_assets/06_tests_eval.png) |
+
+相关机器可读输出：
+
+- `docs/demo_assets/demo_summary.json`：截图与 QA 用例摘要。
+- `docs/demo_assets/qa/*.json`：每个演示问题的 `/ask` 接口返回。
+- `docs/demo_assets/pytest_output.txt`：完整测试输出。
+- `docs/demo_assets/evaluate_output.json`：评估脚本 JSON 输出。
+
+## 9. 当前取舍与限制
 
 - QA 不提供抽取式回退；必须配置 OpenAI-compatible LLM。检索结果仍是唯一事实来源，LLM 只负责组织答复。
 - 表格识别实现为“表格区域检测 + OCR 文本”，不是完整单元格结构恢复；这是本原型的主要迭代点。
@@ -160,7 +186,7 @@ AGENTS.md                 项目协作规则与调试跟踪要求
 - OCR 结果受 Tesseract 语言包、DPI、扫描质量影响；低置信度页面会进入人工复核。默认 `OCR_DPI=120`、`OCR_TIMEOUT=30`，防止扫描噪声导致识别过程长时间阻塞。
 - 轻量检索使用 TF-IDF，适合原型和小规模文档；生产可替换为向量索引、BM25 + embedding 混合检索。
 
-## 9. AI 使用说明模板
+## 10. AI 使用说明模板
 
 本项目允许使用 AI 辅助开发，但结果需要自己负责。建议在提交时如实说明：
 
