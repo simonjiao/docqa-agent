@@ -42,6 +42,9 @@ class ReviewRequest(BaseModel):
     result: str
     notes: str = ""
     evidence: list[dict[str, Any]] = []
+    target_element_ids: list[str] = []
+    target_block_ids: list[str] = []
+    target_chunk_ids: list[str] = []
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -241,12 +244,19 @@ def save_review(doc_id: str, payload: ReviewRequest) -> Dict[str, Any]:
     item = payload.model_dump()
     item["created_at_unix"] = int(time.time())
     item["review_id"] = f"review-{time.time_ns()}"
-    item["target_chunk_ids"] = [ev.get("chunk_id") for ev in item.get("evidence", []) if ev.get("chunk_id")]
-    item["target_block_ids"] = [
+    item["target_chunk_ids"] = list(dict.fromkeys(
+        list(item.get("target_chunk_ids", []))
+        + [ev.get("chunk_id") for ev in item.get("evidence", []) if ev.get("chunk_id")]
+    ))
+    item["target_block_ids"] = list(dict.fromkeys(
+        list(item.get("target_block_ids", []))
+        + [
         block_id
         for ev in item.get("evidence", [])
         for block_id in ev.get("source_block_ids", [])
-    ]
+        ]
+    ))
+    item["target_element_ids"] = list(dict.fromkeys(item.get("target_element_ids", [])))
     result = append_review(doc_id, item)
     return {"ok": True, "item": result["item"], "review_edges": result["edges"]}
 

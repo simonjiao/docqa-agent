@@ -654,6 +654,8 @@ image_ocr alternative blocks 对表格区域识别质量较差，例如 "asf ww 
 - parser 写入 `table_structure`、`table_row`、`table_column`、`table_cell`、`table_line`、`cell_ocr` element，以及结构、候选、block/chunk 追溯边。
 - 生成 `table_markdown` 和 `table_json` 两类 table block，并由 chunker 生成独立 `kind=table` chunk。
 - API 新增 `/api/docs/{doc_id}/tables`、`/api/docs/{doc_id}/pages/{page_no}/tables`、`/api/docs/{doc_id}/tables/{table_id}`；页面识别接口返回结构化表格摘要。
+- 前端识别页支持表格结构化网格展示、cell 点击定位 bbox、cell 需复核入口；问答证据中的 table chunk 按表格渲染。
+- 表格页级检查补充 `table_region_coverage`、`table_grid_confidence`、`table_text_assignment`、`table_header_quality`、`table_ocr_quality`、`table_chunk_traceability`。
 - 新增 `docs-for-test/sample_table_ruled.pdf`、`sample_table_borderless.pdf`、`sample_table_scanned_low_conf.pdf` 三类 fixture。
 - 新增 `tests/test_table_structure.py` 覆盖三类表格、edge 完整性、table chunk 追溯和 API 读取。
 
@@ -661,6 +663,7 @@ image_ocr alternative blocks 对表格区域识别质量较差，例如 "asf ww 
 
 ```bash
 STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q tests/test_table_structure.py
+node --check app/web/static/app.js
 STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q
 STORAGE_DIR=$(mktemp -d) .venv/bin/python scripts/evaluate.py --sample
 ```
@@ -669,6 +672,7 @@ STORAGE_DIR=$(mktemp -d) .venv/bin/python scripts/evaluate.py --sample
 
 ```text
 tests/test_table_structure.py: 3 passed, 5 warnings
+node --check app/web/static/app.js: passed
 full pytest: 19 passed, 5 warnings
 evaluate.py --sample completed; all sample cases returned validation checks
 ```

@@ -2,7 +2,7 @@ from pathlib import Path
 
 from app.core.parser import process_pdf
 from app.core.storage import clean_storage, copy_sample, doc_dir, load_document
-from app.main import get_table, list_doc_tables, list_page_tables
+from app.main import ReviewRequest, get_table, list_doc_tables, list_page_tables, save_review
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / "docs-for-test"
@@ -36,6 +36,15 @@ def test_ruled_table_writes_structure_artifacts_and_table_chunks():
     assert table["rows"][0]["cells"]["Code"] == "0"
     assert "46,XN,-5" in table["rows"][0]["cells"]["Result"]
     assert table["rows"][1]["cells"]["Interpretation"] == "Abnormal"
+    check_names = {check["name"] for check in doc["pages"][0]["checks"]}
+    assert {
+        "table_region_coverage",
+        "table_grid_confidence",
+        "table_text_assignment",
+        "table_header_quality",
+        "table_ocr_quality",
+        "table_chunk_traceability",
+    } <= check_names
 
     table_elements = [item for item in doc["elements"] if item.get("source_group_id") == table["table_id"]]
     assert any(item["element_type"] == "table_structure" for item in table_elements)
@@ -60,6 +69,24 @@ def test_ruled_table_writes_structure_artifacts_and_table_chunks():
     assert list_doc_tables(doc_id)["items"][0]["table_id"] == table["table_id"]
     assert list_page_tables(doc_id, 1)["items"][0]["table_id"] == table["table_id"]
     assert get_table(doc_id, table["table_id"])["table"]["table_id"] == table["table_id"]
+
+    cell_id = table["cell_ids"][0]
+    review = save_review(
+        doc_id,
+        ReviewRequest(
+            question=f"表格单元格复核 {table['table_id']}",
+            answer="CHP01",
+            result="needs_fix",
+            notes="cell review test",
+            target_element_ids=[cell_id],
+        ),
+    )
+    assert review["review_edges"]
+    updated = load_document(doc_id)
+    assert any(
+        edge["edge_type"] == "review_of" and edge["to_id"] == cell_id
+        for edge in updated["edges"]
+    )
 
 
 def test_borderless_table_uses_alignment_strategy_without_ruling_lines():

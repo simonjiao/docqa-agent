@@ -29,6 +29,16 @@ function badge(status) {
   return `<span class="badge ${status}">${status}</span>`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[ch]));
+}
+
 function renderChecks(containerId, checks) {
   const box = $(containerId);
   box.innerHTML = (checks || []).map(c => `
@@ -163,17 +173,21 @@ async function loadPage(pageNo) {
   const page = data.page;
   renderChecks("pageChecks", data.checks);
   $("tableRegions").innerHTML = (page.table_regions || []).map(t => `
-    <div class="table-card" data-bbox="${t.bbox.join(',')}">
-      <strong>疑似表格区域：${t.id}</strong>
-      <div class="small">bbox=${t.bbox.join(', ')}；原因=${t.reason}</div>
+    <div class="table-card" data-bbox="${t.bbox.join(',')}" data-table-id="${(t.structured_tables || [])[0]?.table_id || ""}">
+      <strong>疑似表格区域：${escapeHtml(t.id)}</strong>
+      <div class="small">bbox=${t.bbox.join(', ')}；原因=${escapeHtml(t.reason)}</div>
       ${(t.structured_tables || []).map(table => `
-        <div class="small">结构化：${table.table_id}；${table.status}；${table.strategy}；${table.row_count}x${table.column_count}</div>
+        <div class="small">结构化：${escapeHtml(table.table_id)}；${escapeHtml(table.status)}；${escapeHtml(table.strategy)}；${table.row_count}x${table.column_count}</div>
       `).join("")}
     </div>
   `).join("");
-  document.querySelectorAll(".table-card").forEach(el => el.onclick = () => {
+  $("tableDetails").innerHTML = "";
+  document.querySelectorAll(".table-card").forEach(el => el.onclick = async () => {
     setActiveItem(el, ".table-card");
     focusBbox(el.dataset.bbox.split(',').map(Number), page.image_width, page.image_height);
+    if (el.dataset.tableId) {
+      await loadTableDetail(el.dataset.tableId, page.image_width, page.image_height);
+    }
   });
 
   $("ocrLines").innerHTML = page.lines.map(line => `
@@ -201,11 +215,103 @@ async function ask() {
   renderChecks("answerChecks", result.checks);
   $("evidenceBox").innerHTML = state.lastEvidence.map(ev => `
     <div class="evidence">
-      <strong>${ev.chunk_id}</strong> / 第 ${ev.page} 页 / score=${ev.score} / ${ev.kind}
-      <div class="small">source_types=${(ev.source_types || []).join(", ")}；blocks=${(ev.source_block_ids || []).join(", ")}；warnings=${(ev.warnings || []).join(", ")}</div>
-      <pre>${ev.text}</pre>
+      <strong>${escapeHtml(ev.chunk_id)}</strong> / 第 ${ev.page} 页 / score=${ev.score} / ${escapeHtml(ev.kind)}
+      <div class="small">source_types=${escapeHtml((ev.source_types || []).join(", "))}；blocks=${escapeHtml((ev.source_block_ids || []).join(", "))}；warnings=${escapeHtml((ev.warnings || []).join(", "))}</div>
+      ${renderEvidenceText(ev)}
     </div>
   `).join("") || "<p class='small'>无检索证据。</p>";
+}
+
+async function loadTableDetail(tableId, imageWidth, imageHeight) {
+  const res = await fetch(`/api/docs/${state.docId}/tables/${tableId}`);
+  if (!res.ok) return;
+  const data = await res.json();
+  $("tableDetails").innerHTML = renderStructuredTable(data.table, data.elements);
+  document.querySelectorAll(".table-cell").forEach(cell => cell.onclick = () => {
+    focusBbox(cell.dataset.bbox.split(',').map(Number), imageWidth, imageHeight);
+  });
+  document.querySelectorAll(".cell-review").forEach(btn => btn.onclick = async (event) => {
+    event.stopPropagation();
+    await markCellForReview(btn.dataset.tableId, btn.dataset.cellId, btn.dataset.value || "");
+  });
+}
+
+function renderStructuredTable(table, elements = []) {
+  const cellMap = new Map(elements.filter(item => item.element_type === "table_cell").map(item => [item.element_id, item]));
+  const headers = table.headers?.length ? table.headers : Array.from({ length: table.column_count }, (_, idx) => `col_${idx + 1}`);
+  return `
+    <div class="table-structure">
+      <div class="table-title">
+        <strong>${escapeHtml(table.table_id)}</strong>
+        ${badge(table.status)}
+        <span class="small">${escapeHtml(table.strategy)} / ${table.row_count}x${table.column_count}</span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr>${headers.map(header => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+          <tbody>
+            ${(table.rows || []).map(row => `
+              <tr>${headers.map((header, idx) => {
+                const cellId = (row.cell_ids || [])[idx] || "";
+                const cell = cellMap.get(cellId) || {};
+                const bbox = (cell.bbox || [0, 0, 0, 0]).join(",");
+                const value = row.cells?.[header] ?? "";
+                return `<td class="table-cell" data-bbox="${bbox}">
+                  <div>${escapeHtml(value)}</div>
+                  <button class="secondary cell-review" data-table-id="${escapeHtml(table.table_id)}" data-cell-id="${escapeHtml(cellId)}" data-value="${escapeHtml(value)}">需复核</button>
+                </td>`;
+              }).join("")}</tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderEvidenceText(ev) {
+  if (ev.kind === "table" && (ev.source_types || []).includes("table_json")) {
+    try {
+      const table = JSON.parse(ev.text);
+      return renderStructuredTable(table, []);
+    } catch {
+      return `<pre>${escapeHtml(ev.text)}</pre>`;
+    }
+  }
+  if (ev.kind === "table" && ev.text.includes("| ---")) {
+    return markdownTableToHtml(ev.text);
+  }
+  return `<pre>${escapeHtml(ev.text)}</pre>`;
+}
+
+function markdownTableToHtml(text) {
+  const lines = text.split("\n").filter(line => line.trim().startsWith("|"));
+  if (lines.length < 2) return `<pre>${escapeHtml(text)}</pre>`;
+  const rows = lines
+    .filter(line => !/^\|\s*-+/.test(line))
+    .map(line => line.split("|").slice(1, -1).map(cell => cell.trim()));
+  const [headers, ...body] = rows;
+  return `
+    <div class="table-scroll">
+      <table>
+        <thead><tr>${headers.map(header => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+        <tbody>${body.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function markCellForReview(tableId, cellId, value) {
+  if (!state.docId || !cellId) return;
+  const item = await postJson(`/api/docs/${state.docId}/reviews`, {
+    question: `表格单元格复核 ${tableId}`,
+    answer: value,
+    evidence: [],
+    result: "needs_fix",
+    notes: "表格单元格需人工复核",
+    target_element_ids: [cellId]
+  });
+  setStatus(`人工复核已记录：${item.item.result}`);
 }
 
 async function saveReview() {

@@ -40,6 +40,11 @@
 - [x] 新增 `/api/docs/{doc_id}/pages/{page_no}/tables`。
 - [x] 新增 `/api/docs/{doc_id}/tables/{table_id}`。
 - [x] 页面识别接口返回结构化表格摘要。
+- [x] 识别页表格区域点击后展示结构化网格。
+- [x] 表格 cell 可点击并高亮原图 bbox。
+- [x] `needs_review` cell 提供人工复核入口并写入 `review_of`。
+- [x] 问答证据中的 table chunk 按行列表格展示，不只显示拉平文本。
+- [x] 输出 `table_region_coverage`、`table_grid_confidence`、`table_text_assignment`、`table_header_quality`、`table_ocr_quality`、`table_chunk_traceability` 质量门禁。
 
 ## 5. 验证与测试
 
@@ -47,7 +52,9 @@
 - [x] 增加无线或弱线表格测试。
 - [x] 增加扫描或 OCR 低质量表格测试。
 - [x] 增加 edge 完整性和 table chunk 追溯测试。
+- [x] 增加 table 质量门禁和 cell 复核绑定测试。
 - [x] `git diff --check` 通过。
+- [x] `node --check app/web/static/app.js` 通过。
 - [x] `.venv/bin/pytest -q` 通过。
 - [x] `.venv/bin/python scripts/evaluate.py --sample` 通过。
 
@@ -59,5 +66,6 @@
 ## 验证证据
 
 - `STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q tests/test_table_structure.py` -> `3 passed, 5 warnings`
+- `node --check app/web/static/app.js` -> passed
 - `STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q` -> `19 passed, 5 warnings`
 - `STORAGE_DIR=$(mktemp -d) .venv/bin/python scripts/evaluate.py --sample` -> completed with all sample cases returning validation checks

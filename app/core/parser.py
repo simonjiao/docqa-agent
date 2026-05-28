@@ -222,14 +222,7 @@ def process_pdf(doc_id: str, pdf_path: Path) -> Dict:
         edges.extend(_renumber_edges(table_result.edges, start=len(edges) + 1))
         tables.extend(table_result.tables)
         for table in table_result.tables:
-            page_artifact.checks.append(
-                {
-                    "stage": "document_recognition",
-                    "name": "table_structure",
-                    "status": table.status,
-                    "detail": f"表格 {table.table_id} strategy={table.strategy} rows={table.row_count} cols={table.column_count} confidence={table.confidence}",
-                }
-            )
+            page_artifact.checks.extend(_table_quality_checks(table))
         page_blocks = _build_blocks_from_elements(
             doc_id,
             page_id,
@@ -263,6 +256,7 @@ def process_pdf(doc_id: str, pdf_path: Path) -> Dict:
     chunks, chunk_edges = build_chunks(doc_id, primary_blocks)
     edges.extend(_renumber_edges(chunk_edges, start=len(edges) + 1))
     edges.extend(_alternative_chunk_edges(chunks, alternative_blocks, start=len(edges) + 1))
+    _append_table_chunk_traceability_checks(pages, tables, chunks)
 
     manifest = _manifest(doc_id, pdf_path, probe.to_dict(), pages, chunks)
     _write_markdown(root, manifest, chunks)
@@ -294,6 +288,74 @@ def _manifest(doc_id: str, pdf_path: Path, probe: Dict[str, Any], pages: List[Pa
             "reviews": "reviews.jsonl",
         },
     }
+
+
+def _table_quality_checks(table: Any) -> List[Dict[str, Any]]:
+    total_cells = max(1, table.row_count * table.column_count)
+    data_values = [
+        value
+        for row in table.rows
+        for value in row.get("cells", {}).values()
+        if str(value).strip()
+    ]
+    assignment_ratio = len(data_values) / total_cells
+    generic_headers = [header for header in table.headers if str(header).startswith("col_")]
+    checks = [
+        {
+            "stage": "document_recognition",
+            "name": "table_region_coverage",
+            "status": "pass" if table.row_count and table.column_count else "failed",
+            "detail": f"表格 {table.table_id} 覆盖 {table.row_count} 行 x {table.column_count} 列。",
+        },
+        {
+            "stage": "document_recognition",
+            "name": "table_grid_confidence",
+            "status": "pass" if table.confidence >= 0.6 and table.status != "failed" else table.status,
+            "detail": f"表格 {table.table_id} strategy={table.strategy} confidence={table.confidence}。",
+        },
+        {
+            "stage": "document_recognition",
+            "name": "table_text_assignment",
+            "status": "needs_review" if table.status == "needs_review" else ("pass" if assignment_ratio >= 0.5 else "warn"),
+            "detail": f"表格 {table.table_id} 单元格文本填充率约 {assignment_ratio:.2f}。",
+        },
+        {
+            "stage": "document_recognition",
+            "name": "table_header_quality",
+            "status": "warn" if generic_headers else "pass",
+            "detail": f"表格 {table.table_id} 表头：{', '.join(table.headers) if table.headers else '未识别'}。",
+        },
+        {
+            "stage": "document_recognition",
+            "name": "table_ocr_quality",
+            "status": "needs_review" if table.status == "needs_review" else "pass",
+            "detail": f"表格 {table.table_id} OCR/候选 warning：{', '.join(table.warnings) if table.warnings else '无'}。",
+        },
+    ]
+    return checks
+
+
+def _append_table_chunk_traceability_checks(pages: List[PageArtifact], tables: List[Any], chunks: List[Any]) -> None:
+    chunks_by_group = {
+        group_id
+        for chunk in chunks
+        for group_id in getattr(chunk, "source_group_ids", [])
+        if getattr(chunk, "kind", "") == "table" and getattr(chunk, "source_block_ids", [])
+    }
+    pages_by_no = {page.page_no: page for page in pages}
+    for table in tables:
+        page = pages_by_no.get(table.page_no)
+        if page is None:
+            continue
+        traced = table.table_id in chunks_by_group
+        page.checks.append(
+            {
+                "stage": "document_recognition",
+                "name": "table_chunk_traceability",
+                "status": "pass" if traced else "failed",
+                "detail": f"表格 {table.table_id} {'已' if traced else '未'}进入 kind=table chunk 并保留 source_block_ids。",
+            }
+        )
 
 
 def _write_markdown(root: Path, manifest: Dict[str, Any], chunks: List[Any]) -> None:
