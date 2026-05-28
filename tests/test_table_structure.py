@@ -3,6 +3,7 @@ from pathlib import Path
 from app.core.parser import _usable_ocr_elements, process_pdf
 from app.core.schemas import ElementArtifact
 from app.core.storage import clean_storage, copy_sample, doc_dir, load_document
+from app.core.table_parser import _borderless_layout
 from app.main import ReviewRequest, get_table, list_doc_tables, list_page_tables, save_review
 
 
@@ -130,6 +131,49 @@ def test_borderless_table_uses_alignment_strategy_without_ruling_lines():
         for item in doc["elements"]
     )
     _assert_edge_integrity(doc)
+
+
+def test_split_heading_paragraphs_are_not_inferred_as_borderless_table():
+    elements = []
+    x_positions = [40, 120, 220, 320, 420, 520, 620, 740, 860]
+    rows = [
+        ["多", "智", "能 体", "平", "台", "JD"],
+        ["1.", "", "", "", "", "", "Senior Multi-Agent Platform Engineer", "", ""],
+        ["我 们", "在 做", "什么", "", "", "", "", "", ""],
+        ["我 们 正", "在 建", "设 一个", "面 向 复", "杂 知 识", "工 作", "和 长 期 自", "主 任 务 的 新 一", "代 多 智 能 体 AI 平 台 。"],
+        ["系 统 已", "经 完", "成 早 期", "原 型 验", "证 ，", "下一 阶", "段 将 进 入", "平 台 化 、 工 程", "化 和 长 期 运 行 阶 段 。"],
+        ["体 协 同", "、 复", "杂", "Agent workflow", "", "、 长 期", "任 务 执 行", "、 结 构 化 状", "态 、 工 具 调 用 、 记 忆 系 统 。"],
+    ]
+    for row_index in range(18):
+        row = rows[row_index] if row_index < len(rows) else [
+            "原 型 系",
+            "统 的",
+            "架构 级",
+            "重 构 ，",
+            "设计 统",
+            "一 的",
+            "Agent 抽",
+            "象 、 任 务 调 度",
+            "、 状 态 记 忆 和 工 具 治 理 。",
+        ]
+        y = 120 + row_index * 34
+        for col_index, text in enumerate(row):
+            if not text:
+                continue
+            elements.append(
+                ElementArtifact(
+                    element_id=f"p0001-e{row_index:04d}-{col_index}",
+                    doc_id="doc",
+                    element_type="visible_text",
+                    source_type="visible_text",
+                    page_id="p0001",
+                    page_no=1,
+                    text=text,
+                    bbox=[x_positions[col_index], y, max(24, len(text) * 12), 18],
+                )
+            )
+
+    assert _borderless_layout(elements) is None
 
 
 def test_numbered_notes_are_not_inferred_as_borderless_table():

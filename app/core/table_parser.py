@@ -824,10 +824,16 @@ def _borderless_layout(candidates: List[ElementArtifact]) -> Optional[_Borderles
     list_like_ratio = sum(1 for text in first_cells if _is_list_marker(text)) / max(1, len(first_cells))
     first_row_starts_list = bool(first_cells and _is_list_marker(first_cells[0]))
     long_row_ratio = sum(1 for row in rows if _is_paragraph_like_row(row, region_width)) / max(1, len(rows))
+    split_heading = _is_split_heading_row(rows[0], len(column_centers))
+    prose_fragment_ratio = sum(1 for row in rows if _is_fragmented_prose_row(row, region_width)) / max(1, len(rows))
 
     if first_row_starts_list and list_like_ratio >= 0.35 and (long_row_ratio >= 0.2 or len(column_centers) > 6):
         return None
     if long_row_ratio >= 0.45 and complete_rows < math.ceil(len(rows) * 0.75):
+        return None
+    if split_heading:
+        return None
+    if len(column_centers) >= 7 and prose_fragment_ratio >= 0.3 and complete_rows < math.ceil(len(rows) * 0.85):
         return None
 
     return _BorderlessLayout(
@@ -842,6 +848,8 @@ def _borderless_layout(candidates: List[ElementArtifact]) -> Optional[_Borderles
             "complete_rows": complete_rows,
             "list_like_first_cell_ratio": round(list_like_ratio, 3),
             "long_row_ratio": round(long_row_ratio, 3),
+            "split_heading": split_heading,
+            "prose_fragment_ratio": round(prose_fragment_ratio, 3),
         },
     )
 
@@ -863,6 +871,49 @@ def _is_paragraph_like_row(row: List[ElementArtifact], region_width: int) -> boo
         if len(text) >= 80 or bbox[2] / max(1, region_width) >= 0.55:
             return True
     return False
+
+
+def _is_split_heading_row(row: List[ElementArtifact], column_count: int) -> bool:
+    texts = [_compact_text(item.text) for item in row if _compact_text(item.text)]
+    if column_count < 7 or len(texts) < 4:
+        return False
+    cjk_single = sum(1 for text in texts if len(text) == 1 and _cjk_char_count(text) == 1)
+    cjk_short = sum(1 for text in texts if 1 <= len(text) <= 2 and _cjk_char_count(text) == len(text))
+    filled_ratio = len(texts) / max(1, column_count)
+    joined = "".join(texts)
+    return (
+        len(joined) >= 4
+        and filled_ratio < 0.8
+        and cjk_single / max(1, len(texts)) >= 0.5
+        and cjk_short / max(1, len(texts)) >= 0.65
+    )
+
+
+def _is_fragmented_prose_row(row: List[ElementArtifact], region_width: int) -> bool:
+    texts = [_compact_text(item.text) for item in row if _compact_text(item.text)]
+    if len(texts) < 4:
+        return False
+    joined = "".join(texts)
+    if len(joined) < 24:
+        return False
+    row_bbox = _union_bbox([item.bbox or [0, 0, 0, 0] for item in row])
+    if row_bbox[2] / max(1, region_width) < 0.55:
+        return False
+    cjk_fragments = sum(1 for text in texts if _cjk_char_count(text) > 0 and len(text) <= 10)
+    has_prose_punctuation = bool(re.search(r"[，。；：、,.!?;:]", joined))
+    return (
+        cjk_fragments / max(1, len(texts)) >= 0.55
+        and (_cjk_char_count(joined) >= 24 or has_prose_punctuation)
+    )
+
+
+def _compact_text(text: str) -> str:
+    cleaned = re.sub(r"[\u200b-\u200f\ufeff]", "", text.strip())
+    return re.sub(r"\s+", "", cleaned)
+
+
+def _cjk_char_count(text: str) -> int:
+    return len(re.findall(r"[\u3400-\u9fff]", text))
 
 
 def _group_elements_by_row(elements: List[ElementArtifact]) -> List[List[ElementArtifact]]:

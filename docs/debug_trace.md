@@ -966,3 +966,58 @@ STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q
 
 - 打开 `http://127.0.0.1:8000/` 后 DOM 中可见 `识别内容`、`HTML预览`、`问答与证据`、`人工复核记录` 四个 tab。
 - 当前 Browser 自动化运行时不支持 `locator(...).setInputFiles()`，无法通过浏览器工具完成真实文件上传；数据渲染路径已通过 API、JS 语法检查和后端测试验证。
+
+## 2026-05-28 14:08:32 CST 当前文档第 1 页段落误判为无边框表格
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户指出：当前打开文档第 1 页也有段落/列表被识别为表格；随后提醒前一次排查看的文档错了。
+
+诊断：
+
+- 重新按服务日志和当前 `storage/` 确认，当前文档是 `多智能体平台JD-abce43f968ec7210`，不是此前排查的 `20251229陈海平-e23bf7f4264dfe2c`。
+- 第 1 页没有真实线框表格，`table_region_detection` 原始线框候选为 0。
+- 后续 `table_parser.v1.borderless_region` 仍通过文本对齐推断出 `p0001-alignment-region`，bbox 为 `[40,113,914,1178]`，并生成 `borderless_alignment` 表格。
+- 误判表格为 25 行 9 列，表头为 `多 / 智 / 能 体 / 平 / 台 / JD / col_7...`，实际是标题“多智能体平台JD”和正文段落被文本层拆成多个短片段。
+- 旧规则只拦截典型列表和单个超长行；本页不是传统编号列表，且正文被拆成多列短片段，导致 `list_like_first_cell_ratio=0.04`、`long_row_ratio=0.04`，没有触发负例门。
+
+遇到的问题：
+
+```text
+zsh:1: command not found: python
+```
+
+根因：当前非交互环境没有裸 `python` 命令；本项目调试继续使用 `.venv/bin/python`。
+
+修复：
+
+- 在无边框表格推断中新增“拆字标题”负例：宽列数布局下，首行由多个 CJK 单字/短片段组成且未覆盖全部列时，不作为表格。
+- 新增“多列正文碎片”负例：宽列数布局下，多行短片段拼接成连续中文正文、带标点或足够长 CJK 文本，且完整行比例不足时，不作为表格。
+- 新增回归测试 `test_split_heading_paragraphs_are_not_inferred_as_borderless_table`。
+- 对当前文档强制重新解析，保留同一个 doc_id。
+
+验证结果：
+
+```text
+.venv/bin/python -m py_compile app/core/parser.py app/core/table_parser.py app/main.py
+passed
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q tests/test_table_structure.py
+8 passed, 5 warnings
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q
+24 passed, 5 warnings
+
+node --check app/web/static/app.js
+passed
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/python scripts/evaluate.py --sample
+5 cases completed with validation checks
+
+GET /api/docs/多智能体平台JD-abce43f968ec7210/pages/1/recognition
+status=200
+table_regions=0
+tables=0
+```
+
+剩余风险：该规则只作用于无边框表格文本对齐推断；有真实 ruling lines 的表格和图片内图表过滤仍走各自已有规则。
