@@ -1392,3 +1392,39 @@ HTTP 200
 ```
 
 剩余风险：当前规则覆盖正文页顶部页眉标准号；如果其他标准文件的页眉区域更低、标准号格式不同，继续通过外置规则扩展。
+
+## 2026-05-28 15:07:56 CST 第四页扫描表格识别差诊断
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户反馈：当前国标样本文档第 4 页 `表 1` 的表格识别结果质量差，右侧识别内容出现 `|`、`=-`、`ok mee`、空单元格等异常。
+
+诊断：
+
+- 样本表格为扫描图像表格，缺少可用文本层，解析进入 `scanned_ocr_table` 路径。
+- 当前产物 `p0004-t0001`：`bbox=[85,174,776,275]`，`row_count=9`，`column_count=4`，`status=needs_review`，`confidence=0.806`。
+- 表格被标记为 `low_cell_ocr_confidence`、`needs_review`、`scanned_table_needs_review`，说明结构进入 chunk 不代表内容质量通过。
+- 表头实际是多级合并表头：`检查项目`、`合格质量水平 AQL`、`平键/半圆键/楔键`、`普通/导向/薄型/普通/薄型/钩头`。当前 `_table_artifact()` 只按单行扁平表头映射，导致逻辑列被压成 4 列，表头变成 `| 检查 项 目 |`、`| *# |`、`| ok mee |`、`col_4`。
+- 单元格 OCR 使用整格裁剪和 Tesseract `--psm 6`，裁剪中保留边框线，导致边框被识别为 `|`、`=`、`-`，小字号中文、数字、小数和长横线被误识别或低置信度置空。
+
+命令和重要输出：
+
+```text
+.venv/bin/python - <<'PY'
+... 读取 storage/GBT1568-2008键技术条件-e724ad081078fa41/tables.jsonl 的第 4 页表格摘要 ...
+PY
+table_id=p0004-t0001
+strategy=scanned_ocr_table
+status=needs_review
+warnings=['low_cell_ocr_confidence', 'needs_review', 'scanned_table_needs_review']
+headers=['| 检查 项 目 |', '| *# |', '| ok mee |', 'col_4']
+```
+
+当前结论：
+
+- 主要原因不是表格区域未检测到，而是扫描图像表格的单元格 OCR 与多级合并表头重建能力不足。
+- 下一步修复应保持通用规则：提高扫描表格裁剪分辨率、OCR 前去除网格线、重建多级表头层级，并保留 `needs_review`，不能用 LLM 猜测补齐单元格。
+
+验证结果：本次为原因诊断和追踪记录，尚未改动解析逻辑。
+
+剩余风险：国标表格中常见多级表头、合并单元格、符号列、长横线和小数值，需后续加入扫描表格专用预处理与层级表头恢复。
