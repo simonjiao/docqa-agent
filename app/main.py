@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .core.parser import process_pdf
+from .core.page_polish import polish_page_text_async
 from .core.qa import LLMConfigurationError, LLMGroundingError, build_answer_async
 from .core.retrieval import TfidfRetriever
 from .core.schemas import Chunk
@@ -128,6 +129,18 @@ def get_page_recognition(doc_id: str, page_no: int) -> Dict[str, Any]:
                 "checks": page.get("checks", []),
             }
     raise HTTPException(status_code=404, detail="Page recognition not found.")
+
+
+@app.post("/api/docs/{doc_id}/pages/{page_no}/llm-polish")
+async def polish_page(doc_id: str, page_no: int) -> Dict[str, Any]:
+    doc = load_document(doc_id)
+    if not any(page.get("page_no") == page_no for page in doc["pages"]):
+        raise HTTPException(status_code=404, detail="Page not found.")
+    lines = _page_recognition_lines(doc, page_no)
+    try:
+        return await polish_page_text_async(page_no=page_no, lines=lines)
+    except LLMConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.get("/api/docs/{doc_id}/tables")

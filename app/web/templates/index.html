@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>智能文档问答 Agent 原型</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260528-html-preview-1" />
+  <link rel="stylesheet" href="/static/style.css?v=20260528-llm-polish-1" />
 </head>
 <body>
   <header>
@@ -38,6 +38,7 @@
     <section class="panel inspector">
       <div class="tabs">
         <button class="tab active" data-tab="recognition">识别内容</button>
+        <button class="tab" data-tab="llmPolish">LLM校订</button>
         <button class="tab" data-tab="htmlPreview">HTML预览</button>
         <button class="tab" data-tab="qa">问答与证据</button>
         <button class="tab" data-tab="review">人工复核记录</button>
@@ -49,6 +50,15 @@
         <div id="tableRegions" class="table-regions"></div>
         <div id="tableDetails" class="table-details"></div>
         <div id="ocrLines" class="ocr-lines"></div>
+      </div>
+
+      <div id="llmPolish" class="tab-content">
+        <div class="tab-title-row">
+          <h2>LLM校订</h2>
+          <button id="polishBtn">整理本页</button>
+        </div>
+        <div id="polishMeta" class="small"></div>
+        <div id="polishBox" class="llm-polish"></div>
       </div>
 
       <div id="htmlPreview" class="tab-content">
@@ -85,6 +95,6 @@
     </section>
   </main>
 
-  <script src="/static/app.js?v=20260528-html-preview-1"></script>
+  <script src="/static/app.js?v=20260528-llm-polish-1"></script>
 </body>
 </html>

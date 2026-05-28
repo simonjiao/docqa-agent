@@ -5,6 +5,7 @@ let state = {
   lastQuestion: "",
   lastAnswer: "",
   lastEvidence: [],
+  polishCache: new Map(),
   isUploading: false
 };
 
@@ -52,6 +53,9 @@ function renderChecks(containerId, checks) {
 function switchTab(name) {
   document.querySelectorAll(".tab").forEach(btn => btn.classList.toggle("active", btn.dataset.tab === name));
   document.querySelectorAll(".tab-content").forEach(div => div.classList.toggle("active", div.id === name));
+  if (name === "llmPolish") {
+    ensurePolishForCurrentPage();
+  }
 }
 
 document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
@@ -66,6 +70,7 @@ async function loadDocMeta(meta) {
   state.docId = meta.doc_id;
   state.pageCount = meta.page_count;
   state.currentPage = 1;
+  state.polishCache = new Map();
   setStatus(`已解析：${meta.doc_id}；类型：${meta.probe.pdf_type}；策略：${meta.probe.strategy}；页数：${meta.page_count}；chunk 数：${meta.chunk_count}`);
   await loadPage(1);
 }
@@ -173,6 +178,7 @@ async function loadPage(pageNo) {
   const page = data.page;
   renderChecks("pageChecks", data.checks);
   renderHtmlPreview(page);
+  renderCachedPolish();
   $("tableRegions").innerHTML = (page.table_regions || []).map(t => `
     <div class="table-card" data-bbox="${t.bbox.join(',')}" data-table-id="${(t.structured_tables || [])[0]?.table_id || ""}">
       <strong>疑似表格区域：${escapeHtml(t.id)}</strong>
@@ -202,6 +208,93 @@ async function loadPage(pageNo) {
     focusBbox(el.dataset.bbox.split(',').map(Number), page.image_width, page.image_height);
   });
   $("overlay").getContext("2d").clearRect(0, 0, $("overlay").width, $("overlay").height);
+  if (document.querySelector(".tab.active")?.dataset.tab === "llmPolish") {
+    ensurePolishForCurrentPage();
+  }
+}
+
+function polishCacheKey() {
+  return `${state.docId || ""}:${state.currentPage}`;
+}
+
+function renderCachedPolish() {
+  const cached = state.polishCache.get(polishCacheKey());
+  $("polishBox").innerHTML = cached ? renderPolishOutput(cached.output) : "<p class='small'>暂无校订结果。</p>";
+  $("polishMeta").textContent = cached ? `第 ${cached.page} 页；model=${cached.model || "未调用"}；source_lines=${(cached.source_line_ids || []).length}` : "";
+}
+
+async function ensurePolishForCurrentPage({ force = false } = {}) {
+  if (!state.docId) {
+    $("polishBox").innerHTML = "<p class='small'>请先上传 PDF。</p>";
+    $("polishMeta").textContent = "";
+    return;
+  }
+  const key = polishCacheKey();
+  if (!force && state.polishCache.has(key)) {
+    renderCachedPolish();
+    return;
+  }
+  const btn = $("polishBtn");
+  btn.disabled = true;
+  $("polishMeta").textContent = `第 ${state.currentPage} 页`;
+  $("polishBox").innerHTML = "<p class='small'>正在校订...</p>";
+  try {
+    const result = await postJson(`/api/docs/${state.docId}/pages/${state.currentPage}/llm-polish`, {});
+    state.polishCache.set(key, result);
+    renderCachedPolish();
+  } catch (err) {
+    $("polishBox").innerHTML = `<pre>${escapeHtml(err.message || err)}</pre>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderPolishOutput(text) {
+  const lines = String(text || "").split("\n");
+  let html = "";
+  let listType = null;
+  const closeList = () => {
+    if (listType) {
+      html += `</${listType}>`;
+      listType = null;
+    }
+  };
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      closeList();
+      continue;
+    }
+    if (line.startsWith("## ")) {
+      closeList();
+      html += `<h3>${escapeHtml(line.slice(3))}</h3>`;
+      continue;
+    }
+    const bullet = line.match(/^[-*]\s+(.+)$/);
+    if (bullet) {
+      if (listType !== "ul") {
+        closeList();
+        html += "<ul>";
+        listType = "ul";
+      }
+      html += `<li>${escapeHtml(bullet[1])}</li>`;
+      continue;
+    }
+    const ordered = line.match(/^\d+[.．]\s+(.+)$/);
+    if (ordered) {
+      if (listType !== "ol") {
+        closeList();
+        html += "<ol>";
+        listType = "ol";
+      }
+      html += `<li>${escapeHtml(ordered[1])}</li>`;
+      continue;
+    }
+    closeList();
+    html += `<p>${escapeHtml(line)}</p>`;
+  }
+  closeList();
+  return html || "<p class='small'>暂无校订结果。</p>";
 }
 
 function renderHtmlPreview(page) {
@@ -418,5 +511,6 @@ fileInputEl.dataset.uploadBound = "true";
 $("prevPage").onclick = () => loadPage(state.currentPage - 1);
 $("nextPage").onclick = () => loadPage(state.currentPage + 1);
 $("askBtn").onclick = ask;
+$("polishBtn").onclick = () => ensurePolishForCurrentPage({ force: true });
 $("saveReviewBtn").onclick = saveReview;
 $("refreshReviews").onclick = loadReviews;
