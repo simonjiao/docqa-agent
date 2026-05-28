@@ -34,3 +34,24 @@ def test_build_chunks_keeps_block_trace_edges():
     assert chunks[0].page == 1
     assert "p0001-b0001" in chunks[0].source_block_ids
     assert any(edge.edge_type == "contributes_to_chunk" for edge in edges)
+
+
+def test_text_references_to_tables_do_not_create_table_chunks():
+    blocks = [
+        BlockArtifact(
+            block_id="p0001-b0001",
+            doc_id="doc",
+            page_id="p0001",
+            page_no=1,
+            text="表 1 中增加导向键的内容。",
+            element_ids=["p0001-e0001"],
+            source_types=["image_ocr"],
+            source_group_ids=["p0001-g0001"],
+            bbox=[0, 0, 1, 1],
+            confidence=90,
+        )
+    ]
+
+    chunks, _ = build_chunks("doc", blocks)
+
+    assert chunks[0].kind == "text"

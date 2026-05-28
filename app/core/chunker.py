@@ -59,7 +59,7 @@ def build_chunks(doc_id: str, blocks: List[BlockArtifact], max_blocks: int = 5) 
 
 def _make_chunk(doc_id: str, seq: int, blocks: List[BlockArtifact]) -> Chunk:
     text = "\n".join(block.text for block in blocks).strip()
-    kind = "table" if any(block.kind == "table" for block in blocks) or "表" in text or "AQL" in text or "检查项目" in text else "text"
+    kind = "table" if any(block.kind == "table" for block in blocks) else "text"
     source_types = sorted({source_type for block in blocks for source_type in block.source_types})
     source_group_ids = sorted({group_id for block in blocks for group_id in block.source_group_ids})
     confidence = round(sum(block.confidence for block in blocks) / max(1, len(blocks)), 3)

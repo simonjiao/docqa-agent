@@ -1169,3 +1169,61 @@ passed
 ```
 
 剩余风险：`.env.example` 是模板；真实 `.env` 仍由 `.gitignore` 排除，不能提交。
+
+## 2026-05-28 14:44:46 CST 国标 OCR 外置规则与页码处理
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户现象与要求：
+
+- 当前打开的 `GBT1568-2008键技术条件` 国标文件第一页封面 OCR 把 `ICS 21.120.30` 识别成 `40°" 120. 30 a`，把 GB 标识图形识别成 `( = =` 等正文块。
+- 需要改进实现，并考虑外置规则，允许针对此类国标文件定制。
+- 补充要求：文档中可能有文字缺失、页码在左下角或右下角、页码可能为阿拉伯数字或罗马数字；还可能存在公式、符号、数据、物理或化学领域内容，不能被粗暴噪声规则误删。
+
+处理：
+
+- 新增 `rules/document_recognition_rules.json`，将国标类规则外置。
+- 新增 `app/core/recognition_rules.py`，主流程在 OCR element 进入 block/chunk 前执行外置规则。
+- 国标规则命中条件为 GB/GB-T 编号 + 标准语境；封面规则包括：
+  - 对左上 `ICS/J` 区域做局部 OCR + 2 倍放大，恢复为 `ICS 21.120.30` 和 `J 18`。
+  - 抑制封面 GB 图形区域误识别出的 `( = =`、`ee | 2` 等噪声。
+  - 规范 CJK 空格、`GB/T xxxx—yyyy` 年份连接、`代替`、`发布` 等封面文本。
+- 新增页脚页码规则：底部区域的阿拉伯数字或罗马数字标记为 `page_number/not_body_text`，保留在 `elements.jsonl`，但不进入正文 block/chunk。
+- 收紧表格 chunk 判定：普通文本里出现 `表`、`AQL`、`检查项目` 不再自动把 chunk 标成 `table`；只有真实 table block 进入 `kind=table`。
+- 没有增加通用“短文本/符号多即噪声”的抑制规则，避免误删公式、化学式、物理符号或数据。
+
+验证：
+
+```text
+.venv/bin/python -m py_compile app/core/recognition_rules.py app/core/parser.py app/core/chunker.py app/main.py
+passed
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q tests/test_recognition_rules.py tests/test_chunker.py tests/test_table_structure.py
+12 passed, 5 warnings
+
+FORCE_REPROCESS=1 .venv/bin/python - <<'PY'
+from pathlib import Path
+from app.core.parser import process_pdf
+from app.core.storage import load_document
+
+doc_id = 'GBT1568-2008键技术条件-e724ad081078fa41'
+pdf_path = Path('storage') / doc_id / 'raw' / 'source.pdf'
+process_pdf(doc_id, pdf_path)
+doc = load_document(doc_id)
+print([block['text'] for block in doc['blocks'] if block.get('page_no') == 1][:5])
+print([(e['page_no'], e['text']) for e in doc['elements'] if 'page_number' in e.get('quality', {}).get('signals', [])])
+PY
+['ICS 21.120.30\nJ 18', '中华人民共和国国家标准', 'GB/T 1568—2008', '代替 GB/T 1568—1997', '键 技术条件']
+[(2, 'I'), (3, '1')]
+
+GET /api/docs/GBT1568-2008键技术条件-e724ad081078fa41/pages/1/recognition
+HTTP 200
+第一页文本包含 ICS 21.120.30、J 18、中华人民共和国国家标准、GB/T 1568—2008。
+
+tmux kill-session -t docqa_agent_prototype
+tmux new-session -d -s docqa_agent_prototype -c /Users/simon/ai-agents/docqa_agent_prototype './run.sh'
+GET /
+HTTP 200
+```
+
+剩余风险：当前规则覆盖了这类扫描国标封面和页脚页码；跨行业公式、符号和复杂排版仍需要通过更多真实样本扩展外置规则与 golden set。

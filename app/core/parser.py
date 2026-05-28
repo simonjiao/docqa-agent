@@ -13,6 +13,7 @@ import fitz
 from .chunker import build_chunks
 from .ocr import DEFAULT_DPI, render_page, ocr_image
 from .pdf_probe import probe_pdf
+from .recognition_rules import apply_document_recognition_rules, is_excluded_from_primary_text
 from .schemas import BlockArtifact, EdgeArtifact, ElementArtifact, PageArtifact
 from .storage import doc_dir, load_document, save_document
 from .table_parser import parse_tables
@@ -213,6 +214,30 @@ def process_pdf(doc_id: str, pdf_path: Path) -> Dict:
                 "ocr.tesseract.page_line.v1",
                 {"bbox": item.bbox or [], "confidence": item.confidence},
                 confidence=float(item.confidence or 0) / 100 if item.confidence and item.confidence > 1 else float(item.confidence or 0),
+            )
+
+        rule_application = apply_document_recognition_rules(
+            doc_id=doc_id,
+            source_filename=pdf_path.name,
+            page_no=page_no,
+            image_path=image_path,
+            image_width=image_width,
+            image_height=image_height,
+            page_elements=page_elements,
+            ocr_elements=ocr_elements,
+        )
+        if rule_application.profile_ids:
+            page_artifact.checks.append(
+                {
+                    "stage": "document_recognition",
+                    "name": "external_recognition_rules",
+                    "status": "pass",
+                    "detail": (
+                        "命中外置规则 "
+                        + ", ".join(rule_application.profile_ids)
+                        + f"；应用 {len(rule_application.applied_rule_ids)} 条；抑制 {len(rule_application.suppressed_element_ids)} 个 OCR 噪声元素。"
+                    ),
+                }
             )
 
         usable_ocr_elements = _usable_ocr_elements(ocr_elements, page_elements)
@@ -634,6 +659,7 @@ def _filter_table_regions_in_images(
 
 
 def _usable_ocr_elements(ocr_elements: List[ElementArtifact], page_elements: List[ElementArtifact]) -> List[ElementArtifact]:
+    ocr_elements = [item for item in ocr_elements if not is_excluded_from_primary_text(item)]
     image_bboxes = [
         item.bbox or []
         for item in page_elements
@@ -793,7 +819,7 @@ def _build_blocks_from_elements(
                 source_types=source_types,
                 source_group_ids=source_group_ids,
                 bbox=bbox,
-                kind="table" if "表" in text or "AQL" in text or "检查项目" in text else "text",
+                kind="text",
                 role=role,
                 confidence=round(sum(confidences) / max(1, len(confidences)), 3),
                 warnings=warnings,

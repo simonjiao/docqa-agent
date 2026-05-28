@@ -1,0 +1,96 @@
+{
+  "schema_version": "document-recognition-rules-v1",
+  "profiles": [
+    {
+      "id": "chinese_national_standard",
+      "description": "Chinese GB/GB-T scanned standard pages. Keep deterministic OCR repairs outside parser code.",
+      "match": {
+        "all_text_patterns": [
+          "GB\\s*/\\s*T\\s*\\d+|GB\\s+\\d+",
+          "中\\s*华\\s*人\\s*民\\s*共\\s*和\\s*国\\s*国\\s*家\\s*标|本\\s*标\\s*准|标准"
+        ]
+      },
+      "compact_cjk_spacing": true,
+      "text_rewrites": [
+        {
+          "id": "gb_standard_year_dash",
+          "pattern": "\\b(GB\\s*/\\s*T|GB)\\s*(\\d+(?:\\.\\s*\\d+)*)\\s*[一—-]\\s*(\\d{4})\\b",
+          "replacement": "\\1 \\2—\\3"
+        },
+        {
+          "id": "gb_standard_number_spacing",
+          "pattern": "\\b(GB\\s*/\\s*T|GB)\\s*(\\d+)\\.\\s+(\\d+)\\b",
+          "replacement": "\\1 \\2.\\3"
+        },
+        {
+          "id": "national_standard_title",
+          "pattern": "^中\\s*华\\s*人\\s*民\\s*共\\s*和\\s*国\\s*国\\s*家\\s*标\\s*准[:;；]?$",
+          "replacement": "中华人民共和国国家标准"
+        },
+        {
+          "id": "cover_replaces_standard",
+          "pattern": "^代\\s*[赴替]\\s*(GB\\s*/\\s*T\\s*\\d+)\\s*[一—-]\\s*(\\d{4})$",
+          "replacement": "代替 \\1—\\2"
+        },
+        {
+          "id": "cover_standard_subject",
+          "pattern": "^键\\s*[”\"“]?\\s*技术\\s*条件$",
+          "replacement": "键 技术条件"
+        },
+        {
+          "id": "cover_publish_word",
+          "pattern": "全\\s*帮$",
+          "replacement": "发布"
+        }
+      ],
+      "region_ocr_rewrites": [
+        {
+          "id": "cover_ics_ccs_top_left",
+          "page_numbers": [1],
+          "bbox_ratio": [0.07, 0.015, 0.42, 0.045],
+          "scale": 2,
+          "lang": "eng",
+          "psm": 6,
+          "pattern": "ICS\\s*(?P<ics>[0-9.\\s]+).*?J\\s*(?P<ccs>\\d+)",
+          "template": "ICS {ics}\nJ {ccs}",
+          "target": "replace_first_overlapping_ocr",
+          "suppress_overlapping": true,
+          "normalizers": [
+            {
+              "pattern": "\\s+",
+              "replacement": " "
+            },
+            {
+              "pattern": "\\.\\s+",
+              "replacement": "."
+            }
+          ]
+        }
+      ],
+      "page_number_rules": [
+        {
+          "id": "footer_page_number",
+          "bbox_ratio": [0.0, 0.90, 1.0, 0.10],
+          "patterns": [
+            "^\\d{1,4}$",
+            "^[ivxlcdmIVXLCDM]{1,8}$",
+            "^[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩⅪⅫ]+$"
+          ],
+          "max_width_ratio": 0.08,
+          "max_height_ratio": 0.035
+        }
+      ],
+      "suppressions": [
+        {
+          "id": "cover_gb_logo_noise",
+          "page_numbers": [1],
+          "bbox_ratio": [0.55, 0.02, 0.36, 0.10],
+          "patterns": [
+            "^[()=\\s|._-]+$",
+            "^e+\\s*\\|?\\s*\\d+$"
+          ]
+        }
+      ]
+    }
+  ]
+}
