@@ -795,3 +795,85 @@ curl -sS http://127.0.0.1:8000/api/docs/20251229陈海平-e23bf7f4264dfe2c/pages
 ```
 
 剩余风险：无框表格检测现在更保守；真实无框表格仍由 `sample_table_borderless.pdf` 回归覆盖，但后续需要继续扩充真实无框财报/检验报告样本，防止过严门禁漏掉特殊布局。
+
+## 2026-05-28 13:26:22 CST 第 3 页图表被同时识别为表格候选
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户指出：文档 `20251229陈海平-e23bf7f4264dfe2c` 第 3 页中的图片/图表也被识别成表格，需解释为何主动归为表格而不是图片或其他特殊格式图表。
+
+诊断命令与关键输出：
+
+```text
+curl -sS http://127.0.0.1:8000/api/docs/20251229陈海平-e23bf7f4264dfe2c/pages/3/recognition
+
+table_regions:
+- bbox=[81,414,824,55], reason="ruling_lines", structured_tables=[]
+- bbox=[83,689,822,55], reason="ruling_lines", structured table p0003-t0002
+
+tables:
+- table_id=p0003-t0002
+- strategy=scanned_ocr_table
+- bbox=[83,689,822,55]
+- row_count=2
+- column_count=1
+- status=needs_review
+- warnings=low_cell_ocr_confidence, needs_review, scanned_table_needs_review
+
+image elements:
+- p0003-e0577 image_object bbox=[62,411,852,107] ext=jpeg
+- p0003-e0578 image_object bbox=[62,686,852,107] ext=jpeg
+```
+
+结论：
+
+- 第 3 页的两个图表已被 PyMuPDF 识别为 `image_object`，所以不是“没有识别成图片”。
+- 表格候选检测 `detect_table_regions()` 是独立的 OpenCV 线条检测流程，会在整页渲染图上寻找长横线/竖线；图表里的坐标轴、外框、水平网格线满足 `ruling_lines` 条件，因此又额外生成了 `table_region`。
+- 当前 `parse_tables()` 对有线候选优先尝试 `_parse_ruled_grid()`，当候选区域位于图片内且没有可用文本层时，策略会变成 `scanned_ocr_table`。
+- 第二个图表区域被恢复成 2 行 x 1 列，但 OCR 单元格为空，质量状态已是 `needs_review`，说明它不是可信表格。
+- 现有系统还没有 chart/plot 专用 artifact，也没有“如果 ruling-line 候选被 image_object 大面积包含且单元格结构退化，就降级为图表/图片”的抑制逻辑。
+
+后续修复方向：增加图表/图片优先级门禁，至少对被 `image_object` 高覆盖的 `ruling_lines` 候选执行退化表格过滤，例如 1 列、填充率 0、低 OCR、无表头、区域高度很小且横向很长时，不生成 table chunk，改为保留 image/figure 候选。
+
+## 2026-05-28 13:31:48 CST 图表线条表格候选与图内 OCR 噪声修复
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户指出：第 3 页图表区域内的识别也有问题，截图中图表被框选并出现低置信 OCR 文本“了”“辣 人”。
+
+修复：
+
+- 在 parser 层增加图片覆盖区域门禁：如果 `ruling_lines` 表格候选被 `image_object` 高比例覆盖，且区域呈现“超宽、很矮、横向线条”特征，则抑制该 table region，不再进入 `parse_tables()`。
+- 对图片内部的低置信短 OCR 噪声增加过滤：低置信、短文本或超宽扁平的图内 OCR 不进入主文本 block、候选链接和表格文本候选。
+- 保留原始 `image_object`，不把图表降级丢失；当前仍没有独立 chart artifact，先以图片优先避免错误表格和错误正文。
+- 新增 `docs-for-test/sample_chart_image_not_table.pdf`，覆盖“带坐标轴/网格线的内嵌图表不是表格”的回归测试。
+
+验证结果：
+
+```text
+.venv/bin/python -m py_compile app/core/parser.py app/core/table_parser.py
+passed
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q tests/test_table_structure.py
+6 passed, 5 warnings
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q
+22 passed, 5 warnings
+
+node --check app/web/static/app.js
+passed
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/python scripts/evaluate.py --sample
+5 cases completed with validation checks
+
+curl -sS http://127.0.0.1:8000/api/docs/20251229陈海平-e23bf7f4264dfe2c/pages/3/recognition
+# page.table_regions = []
+# page.tables = []
+# page.text contains no "辣"
+# page.lines has no exact "了" line
+# table_region_detection: 检测到 0 个疑似表格区域；已抑制 2 个图片内图表线条候选。
+```
+
+默认 Web 存储已用 `/Users/simon/ai-agents/docs-for-test/20251229陈海平.pdf` 重新解析恢复；第 3 页当前可见 API 结果已生效。
+
+剩余风险：当前策略是图表/图片优先的保守门禁；如果真实文档把很矮的单行表格嵌在图片中，可能被抑制。扫描表格 fixture `sample_table_scanned_low_conf.pdf` 已覆盖普通图片内表格不被误杀。

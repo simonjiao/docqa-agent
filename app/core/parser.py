@@ -169,11 +169,25 @@ def process_pdf(doc_id: str, pdf_path: Path) -> Dict:
                 {"page_id": page_id, "element_type": item.element_type},
             )
 
+        filtered_table_regions, suppressed_table_regions = _filter_table_regions_in_images(
+            recognition.table_regions,
+            page_elements,
+            image_width=image_width,
+            image_height=image_height,
+        )
+        if suppressed_table_regions:
+            page_artifact.table_region_count = len(filtered_table_regions)
+            page_artifact.checks = _replace_table_region_detection_check(
+                page_artifact.checks,
+                kept_count=len(filtered_table_regions),
+                suppressed_count=len(suppressed_table_regions),
+            )
+
         table_region_elements = _table_elements(
             doc_id,
             page_id,
             page_no,
-            recognition.table_regions,
+            filtered_table_regions,
             start_index=len(elements) + 1,
         )
         for item in table_region_elements:
@@ -200,10 +214,11 @@ def process_pdf(doc_id: str, pdf_path: Path) -> Dict:
                 confidence=float(item.confidence or 0) / 100 if item.confidence and item.confidence > 1 else float(item.confidence or 0),
             )
 
-        _link_text_candidates(page_elements, ocr_elements, add_edge)
+        usable_ocr_elements = _usable_ocr_elements(ocr_elements, page_elements)
+        _link_text_candidates(page_elements, usable_ocr_elements, add_edge)
 
-        primary_text = _primary_text_elements(page_elements, ocr_elements, include_unmatched_ocr=page_image_blocks > 0)
-        alternative_text = _alternative_text_elements(page_elements, ocr_elements, primary_text)
+        primary_text = _primary_text_elements(page_elements, usable_ocr_elements, include_unmatched_ocr=page_image_blocks > 0)
+        alternative_text = _alternative_text_elements(page_elements, usable_ocr_elements, primary_text)
         table_result = parse_tables(
             doc_id=doc_id,
             page_id=page_id,
@@ -214,7 +229,7 @@ def process_pdf(doc_id: str, pdf_path: Path) -> Dict:
             page_element_id=page_element_id,
             page_render_id=page_render_id,
             table_regions=table_region_elements,
-            text_candidates=page_elements + ocr_elements,
+            text_candidates=page_elements + usable_ocr_elements,
             start_element_index=len(elements) + 1,
             start_block_index=len(blocks) + 1,
         )
@@ -333,6 +348,40 @@ def _table_quality_checks(table: Any) -> List[Dict[str, Any]]:
         },
     ]
     return checks
+
+
+def _replace_table_region_detection_check(
+    checks: List[Dict[str, Any]],
+    *,
+    kept_count: int,
+    suppressed_count: int,
+) -> List[Dict[str, Any]]:
+    updated = []
+    replaced = False
+    status = "pass" if kept_count else "info"
+    detail = f"检测到 {kept_count} 个疑似表格区域；已抑制 {suppressed_count} 个图片内图表线条候选。"
+    for check in checks:
+        if check.get("name") == "table_region_detection":
+            updated.append(
+                {
+                    **check,
+                    "status": status,
+                    "detail": detail,
+                }
+            )
+            replaced = True
+        else:
+            updated.append(check)
+    if not replaced:
+        updated.append(
+            {
+                "stage": "document_recognition",
+                "name": "table_region_detection",
+                "status": status,
+                "detail": detail,
+            }
+        )
+    return updated
 
 
 def _append_table_chunk_traceability_checks(pages: List[PageArtifact], tables: List[Any], chunks: List[Any]) -> None:
@@ -557,6 +606,47 @@ def _extract_page_elements(
     return elements
 
 
+def _filter_table_regions_in_images(
+    table_regions: List[Dict[str, Any]],
+    page_elements: List[ElementArtifact],
+    *,
+    image_width: int,
+    image_height: int,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    image_bboxes = [
+        item.bbox or []
+        for item in page_elements
+        if item.element_type == "image_object" and _valid_bbox(item.bbox or [])
+    ]
+    if not image_bboxes:
+        return list(table_regions), []
+
+    kept: List[Dict[str, Any]] = []
+    suppressed: List[Dict[str, Any]] = []
+    for region in table_regions:
+        bbox = region.get("bbox", [])
+        if _is_chart_line_table_candidate(bbox, image_bboxes, image_width=image_width, image_height=image_height):
+            suppressed.append(region)
+        else:
+            kept.append(region)
+    return kept, suppressed
+
+
+def _usable_ocr_elements(ocr_elements: List[ElementArtifact], page_elements: List[ElementArtifact]) -> List[ElementArtifact]:
+    image_bboxes = [
+        item.bbox or []
+        for item in page_elements
+        if item.element_type == "image_object" and _valid_bbox(item.bbox or [])
+    ]
+    if not image_bboxes:
+        return ocr_elements
+    return [
+        item
+        for item in ocr_elements
+        if not _is_image_ocr_noise(item, image_bboxes)
+    ]
+
+
 def _ocr_elements(
     doc_id: str,
     page_id: str,
@@ -586,6 +676,40 @@ def _ocr_elements(
             )
         )
     return result
+
+
+def _is_chart_line_table_candidate(
+    bbox: List[int],
+    image_bboxes: List[List[int]],
+    *,
+    image_width: int,
+    image_height: int,
+) -> bool:
+    if not _valid_bbox(bbox):
+        return False
+    aspect_ratio = bbox[2] / max(1, bbox[3])
+    if aspect_ratio < 8:
+        return False
+    if bbox[3] > image_height * 0.08:
+        return False
+    if bbox[2] < image_width * 0.45:
+        return False
+    return any(_bbox_overlap_candidate_ratio(bbox, image_bbox) >= 0.9 for image_bbox in image_bboxes)
+
+
+def _is_image_ocr_noise(ocr_element: ElementArtifact, image_bboxes: List[List[int]]) -> bool:
+    bbox = ocr_element.bbox or []
+    if not _valid_bbox(bbox):
+        return False
+    if not any(_bbox_overlap_candidate_ratio(bbox, image_bbox) >= 0.85 for image_bbox in image_bboxes):
+        return False
+    confidence = float(ocr_element.confidence or 0)
+    if confidence > 45:
+        return False
+    compact_text = "".join((ocr_element.text or "").split())
+    if len(compact_text) <= 6:
+        return True
+    return bbox[3] <= 28 and bbox[2] >= 350
 
 
 def _table_elements(
@@ -918,6 +1042,24 @@ def _bbox_overlap(a: List[int], b: List[int]) -> float:
     intersection = (ix2 - ix1) * (iy2 - iy1)
     smaller = max(1, min(aw * ah, bw * bh))
     return intersection / smaller
+
+
+def _bbox_overlap_candidate_ratio(candidate: List[int], container: List[int]) -> float:
+    if not _valid_bbox(candidate) or not _valid_bbox(container):
+        return 0.0
+    ax1, ay1, aw, ah = candidate
+    bx1, by1, bw, bh = container
+    ax2, ay2 = ax1 + aw, ay1 + ah
+    bx2, by2 = bx1 + bw, by1 + bh
+    ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+    ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+    if ix2 <= ix1 or iy2 <= iy1:
+        return 0.0
+    return ((ix2 - ix1) * (iy2 - iy1)) / max(1, aw * ah)
+
+
+def _valid_bbox(bbox: List[int]) -> bool:
+    return len(bbox) == 4 and bbox[2] > 0 and bbox[3] > 0
 
 
 def _normalize_text(text: str) -> str:

@@ -13,6 +13,7 @@ This directory holds PDF files used by automated tests and local evaluation.
 - `sample_table_merged_row.pdf`: synthetic ruled table with a row-level merged value cell.
 - `sample_table_borderless.pdf`: synthetic borderless table with aligned text columns.
 - `sample_text_numbered_notes.pdf`: synthetic numbered narrative page that must not be inferred as a borderless table.
+- `sample_chart_image_not_table.pdf`: synthetic embedded chart image with ruling-like grid lines that must remain an image, not a table.
 - `sample_table_scanned_low_conf.pdf`: synthetic scanned table with clear grid and intentionally low-confidence text.
 - `多智能体平台JD.pdf`: real-world text-layer Chinese/English PDF with Type3/vector glyph signals.
 

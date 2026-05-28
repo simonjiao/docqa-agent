@@ -144,6 +144,24 @@ def test_numbered_notes_are_not_inferred_as_borderless_table():
     _assert_edge_integrity(doc)
 
 
+def test_chart_image_rulings_are_not_promoted_to_table():
+    _, doc = _parse_fixture("sample_chart_image_not_table.pdf")
+
+    assert doc["tables"] == []
+    assert any(item["element_type"] == "image_object" for item in doc["elements"])
+    assert not any(item["element_type"] == "table_region" for item in doc["elements"])
+    assert not any(block["kind"] == "table" for block in doc["blocks"])
+    table_checks = [
+        check
+        for page in doc["pages"]
+        for check in page["checks"]
+        if check["name"] == "table_region_detection"
+    ]
+    assert table_checks
+    assert "已抑制" in table_checks[0]["detail"]
+    _assert_edge_integrity(doc)
+
+
 def test_scanned_low_confidence_table_keeps_cells_and_requires_review():
     _, doc = _parse_fixture("sample_table_scanned_low_conf.pdf")
     table = doc["tables"][0]
