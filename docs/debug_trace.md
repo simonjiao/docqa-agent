@@ -931,3 +931,38 @@ curl -sS http://127.0.0.1:8000/api/docs/20251229陈海平-e23bf7f4264dfe2c/pages
 ```
 
 默认 Web 存储已重新解析恢复；第 3 页当前 API 中不再出现单独 `3` 行。
+
+## 2026-05-28 13:47:43 CST HTML 预览标签新增
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：在“识别内容”标签旁添加一个 HTML 预览标签，并继续实现。
+
+实现：
+
+- 前端新增 `HTML预览` tab，与 `识别内容`、`问答与证据`、`人工复核记录` 并列。
+- `/api/docs/{doc_id}/pages/{page_no}/recognition` 增加 `page.images`，返回当前页 `image_object` 的 bbox、元素 ID 和扩展名。
+- HTML 预览按 bbox 阅读顺序合成正文、结构化表格和图片/图表占位。
+- 点击 HTML 预览中的文本、表格或图片占位，会复用已有 PDF bbox 高亮和滚动定位。
+- 表格仍用结构化 table artifact 渲染；识别内容 tab 保留原始行、置信度、bbox、表格候选和复核细节。
+
+验证：
+
+```text
+.venv/bin/python -m py_compile app/main.py
+passed
+
+node --check app/web/static/app.js
+passed
+
+curl -sS http://127.0.0.1:8000/api/docs/20251229陈海平-e23bf7f4264dfe2c/pages/3/recognition
+# page.images includes p0003-e0577 and p0003-e0578
+
+STORAGE_DIR=$(mktemp -d) .venv/bin/pytest -q
+23 passed, 5 warnings
+```
+
+浏览器验证：
+
+- 打开 `http://127.0.0.1:8000/` 后 DOM 中可见 `识别内容`、`HTML预览`、`问答与证据`、`人工复核记录` 四个 tab。
+- 当前 Browser 自动化运行时不支持 `locator(...).setInputFiles()`，无法通过浏览器工具完成真实文件上传；数据渲染路径已通过 API、JS 语法检查和后端测试验证。

@@ -42,14 +42,14 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .fail { color: var(--fail); background: #fdeaea; }
 .info, .not_configured, .pending { color: #39506e; background: #eef3fa; }
 .needs_review { color: var(--warn); background: #fff4de; }
-.ocr-line, .evidence, .review-item, .table-card { border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; margin: 8px 0; background: #fff; }
+.ocr-line, .evidence, .review-item, .table-card, .preview-item { border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; margin: 8px 0; background: #fff; }
 .ocr-line:hover { border-color: var(--primary); cursor: pointer; }
-.ocr-line.active, .table-card.active {
+.ocr-line.active, .table-card.active, .preview-item.active {
   border-color: var(--primary);
   background: #e7f0ff;
   box-shadow: inset 4px 0 0 var(--primary), 0 0 0 2px rgba(29,95,209,.16);
 }
-.table-card:hover { border-color: var(--primary); cursor: pointer; }
+.table-card:hover, .preview-item:hover { border-color: var(--primary); cursor: pointer; }
 .small { color: var(--muted); font-size: 12px; margin-top: 4px; }
 textarea, input, select { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; margin: 8px 0; font: inherit; }
 .answer-box { margin: 10px 0; padding: 12px; background: #eef7ff; border: 1px solid #cfe4ff; border-radius: 8px; white-space: pre-wrap; }
@@ -64,4 +64,13 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 6px 0 0; color: #27
 .table-cell { cursor: pointer; min-width: 88px; }
 .table-cell:hover { background: #e7f0ff; }
 .cell-review { margin-top: 5px; padding: 4px 7px; font-size: 12px; }
+.html-preview { max-width: 880px; margin: 0 auto; }
+.preview-text { line-height: 1.72; font-size: 15px; }
+.preview-text p { margin: 0 0 8px; color: var(--text); }
+.preview-text p:last-child { margin-bottom: 0; }
+.preview-table { padding: 0; overflow: hidden; }
+.preview-table-title { padding: 9px 10px; border-bottom: 1px solid var(--border); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.preview-figure { min-height: 94px; display: grid; align-content: center; gap: 8px; background: #fbfcff; }
+.figure-box { height: 54px; border: 1px dashed #9aa9bd; border-radius: 6px; display: grid; place-items: center; color: #39506e; background: #f3f6fb; }
+.preview-figure figcaption { color: var(--muted); font-size: 12px; }
 @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } .image-wrap, .tab-content { height: 65vh; } header { display: block; } }

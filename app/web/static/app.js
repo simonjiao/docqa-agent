@@ -172,6 +172,7 @@ async function loadPage(pageNo) {
   const data = await res.json();
   const page = data.page;
   renderChecks("pageChecks", data.checks);
+  renderHtmlPreview(page);
   $("tableRegions").innerHTML = (page.table_regions || []).map(t => `
     <div class="table-card" data-bbox="${t.bbox.join(',')}" data-table-id="${(t.structured_tables || [])[0]?.table_id || ""}">
       <strong>疑似表格区域：${escapeHtml(t.id)}</strong>
@@ -201,6 +202,67 @@ async function loadPage(pageNo) {
     focusBbox(el.dataset.bbox.split(',').map(Number), page.image_width, page.image_height);
   });
   $("overlay").getContext("2d").clearRect(0, 0, $("overlay").width, $("overlay").height);
+}
+
+function renderHtmlPreview(page) {
+  const items = [
+    ...(page.lines || [])
+      .filter(line => String(line.text || "").trim() && !String(line.source_type || "").includes("table_"))
+      .map(line => ({ type: "text", bbox: line.bbox || [0, 0, 0, 0], payload: line })),
+    ...(page.tables || [])
+      .map(table => ({ type: "table", bbox: table.bbox || [0, 0, 0, 0], payload: table })),
+    ...(page.images || [])
+      .map(image => ({ type: "image", bbox: image.bbox || [0, 0, 0, 0], payload: image }))
+  ].sort((a, b) => (a.bbox[1] - b.bbox[1]) || (a.bbox[0] - b.bbox[0]));
+
+  $("htmlPreviewBox").innerHTML = items.map(item => {
+    const bbox = item.bbox.join(",");
+    if (item.type === "table") {
+      return `<section class="preview-item preview-table" data-bbox="${bbox}">${renderPreviewTable(item.payload)}</section>`;
+    }
+    if (item.type === "image") {
+      const image = item.payload;
+      return `
+        <figure class="preview-item preview-figure" data-bbox="${bbox}">
+          <div class="figure-box">图片/图表区域</div>
+          <figcaption>${escapeHtml(image.element_id)}${image.ext ? ` / ${escapeHtml(image.ext)}` : ""}</figcaption>
+        </figure>
+      `;
+    }
+    return `
+      <section class="preview-item preview-text" data-bbox="${bbox}">
+        ${String(item.payload.text || "").split("\n").filter(Boolean).map(part => `<p>${escapeHtml(part)}</p>`).join("")}
+      </section>
+    `;
+  }).join("") || "<p class='small'>暂无可预览内容。</p>";
+
+  document.querySelectorAll(".preview-item[data-bbox]").forEach(el => {
+    el.onclick = () => {
+      setActiveItem(el, ".preview-item");
+      focusBbox(el.dataset.bbox.split(",").map(Number), page.image_width, page.image_height);
+    };
+  });
+}
+
+function renderPreviewTable(table) {
+  const headers = table.headers?.length ? table.headers : Array.from({ length: table.column_count }, (_, idx) => `col_${idx + 1}`);
+  return `
+    <div class="preview-table-title">
+      <strong>${escapeHtml(table.table_id)}</strong>
+      ${badge(table.status)}
+      <span class="small">${escapeHtml(table.strategy)} / ${table.row_count}x${table.column_count}</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr>${headers.map(header => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+        <tbody>
+          ${(table.rows || []).map(row => `
+            <tr>${headers.map(header => `<td>${escapeHtml(row.cells?.[header] ?? "")}</td>`).join("")}</tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 async function ask() {

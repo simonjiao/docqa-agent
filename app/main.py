@@ -120,6 +120,7 @@ def get_page_recognition(doc_id: str, page_no: int) -> Dict[str, Any]:
                     "image_height": page["height"],
                     "text": "\n".join(line["text"] for line in lines),
                     "lines": lines,
+                    "images": _page_images(doc, page_no),
                     "table_regions": table_regions,
                     "tables": page_tables,
                     "average_confidence": page["average_ocr_confidence"],
@@ -194,6 +195,21 @@ def _page_recognition_lines(doc: Dict[str, Any], page_no: int) -> list[dict[str,
         }
         for element in doc["elements"]
         if element.get("page_no") == page_no and element.get("element_type") == "ocr_text"
+    ]
+
+
+def _page_images(doc: Dict[str, Any], page_no: int) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": element["element_id"],
+            "element_id": element["element_id"],
+            "page": page_no,
+            "bbox": element.get("bbox") or [0, 0, 0, 0],
+            "source_type": element.get("source_type"),
+            "ext": element.get("raw_ref", {}).get("ext", ""),
+        }
+        for element in doc["elements"]
+        if element.get("page_no") == page_no and element.get("element_type") == "image_object"
     ]
 
 
