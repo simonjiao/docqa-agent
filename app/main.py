@@ -153,15 +153,15 @@ def ask(doc_id: str, payload: AskRequest) -> Dict[str, Any]:
 def save_review(doc_id: str, payload: ReviewRequest) -> Dict[str, Any]:
     item = payload.model_dump()
     item["created_at_unix"] = int(time.time())
-    item["review_id"] = f"review-{item['created_at_unix']}"
+    item["review_id"] = f"review-{time.time_ns()}"
     item["target_chunk_ids"] = [ev.get("chunk_id") for ev in item.get("evidence", []) if ev.get("chunk_id")]
     item["target_block_ids"] = [
         block_id
         for ev in item.get("evidence", [])
         for block_id in ev.get("source_block_ids", [])
     ]
-    append_review(doc_id, item)
-    return {"ok": True, "item": item}
+    result = append_review(doc_id, item)
+    return {"ok": True, "item": result["item"], "review_edges": result["edges"]}
 
 
 @app.get("/api/docs/{doc_id}/reviews")

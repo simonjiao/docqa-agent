@@ -137,6 +137,7 @@ class BlockArtifact:
     source_types: List[str]
     bbox: List[int]
     kind: str = "text"
+    role: str = "primary"
     source_group_ids: List[str] = None  # type: ignore[assignment]
     confidence: float = 0.0
     warnings: List[str] = None  # type: ignore[assignment]

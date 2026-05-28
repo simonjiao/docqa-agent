@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections import defaultdict
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -57,6 +58,8 @@ def process_pdf(doc_id: str, pdf_path: Path) -> Dict:
     elements: List[ElementArtifact] = []
     edges: List[EdgeArtifact] = []
     blocks: List[BlockArtifact] = []
+    primary_blocks: List[BlockArtifact] = []
+    alternative_blocks: List[BlockArtifact] = []
 
     def add_edge(
         from_id: str,
@@ -198,8 +201,26 @@ def process_pdf(doc_id: str, pdf_path: Path) -> Dict:
         _link_text_candidates(page_elements, ocr_elements, add_edge)
 
         primary_text = _primary_text_elements(page_elements, ocr_elements)
-        page_blocks = _build_blocks_from_elements(doc_id, page_id, page_no, primary_text, start_index=len(blocks) + 1)
-        for block in page_blocks:
+        alternative_text = _alternative_text_elements(page_elements, ocr_elements, primary_text)
+        page_blocks = _build_blocks_from_elements(
+            doc_id,
+            page_id,
+            page_no,
+            primary_text,
+            start_index=len(blocks) + 1,
+            role="primary",
+        )
+        page_alternative_blocks = _build_blocks_from_elements(
+            doc_id,
+            page_id,
+            page_no,
+            alternative_text,
+            start_index=len(blocks) + len(page_blocks) + 1,
+            role="alternative",
+        )
+        primary_blocks.extend(page_blocks)
+        alternative_blocks.extend(page_alternative_blocks)
+        for block in page_blocks + page_alternative_blocks:
             blocks.append(block)
             for element_id in block.element_ids:
                 add_edge(
@@ -207,11 +228,12 @@ def process_pdf(doc_id: str, pdf_path: Path) -> Dict:
                     block.block_id,
                     "contributes_to_block",
                     "block_builder.v1.reading_order_merge",
-                    {"page_id": page_id, "block_id": block.block_id},
+                    {"page_id": page_id, "block_id": block.block_id, "role": block.role},
                 )
 
-    chunks, chunk_edges = build_chunks(doc_id, blocks)
+    chunks, chunk_edges = build_chunks(doc_id, primary_blocks)
     edges.extend(_renumber_edges(chunk_edges, start=len(edges) + 1))
+    edges.extend(_alternative_chunk_edges(chunks, alternative_blocks, start=len(edges) + 1))
 
     manifest = _manifest(doc_id, pdf_path, probe.to_dict(), pages, chunks)
     _write_markdown(root, manifest, chunks)
@@ -507,6 +529,7 @@ def _build_blocks_from_elements(
     page_no: int,
     text_elements: List[ElementArtifact],
     start_index: int,
+    role: str = "primary",
 ) -> List[BlockArtifact]:
     blocks = []
     for offset, element in enumerate(text_elements):
@@ -525,8 +548,9 @@ def _build_blocks_from_elements(
                 source_group_ids=[element.source_group_id] if element.source_group_id else [],
                 bbox=bbox,
                 kind="table" if "表" in element.text or "AQL" in element.text or "检查项目" in element.text else "text",
+                role=role,
                 confidence=float(element.confidence or 1.0),
-                warnings=element.quality.get("signals", []),
+                warnings=sorted(set(element.quality.get("signals", []) + ([] if role == "primary" else ["alternative_candidate"]))),
             )
         )
     return blocks
@@ -536,8 +560,70 @@ def _primary_text_elements(page_elements: List[ElementArtifact], ocr_elements: L
     visible_text = [item for item in page_elements if item.element_type == "text_span" and item.text.strip()]
     visible_chars = sum(len(item.text.strip()) for item in visible_text)
     if visible_chars >= 80:
-        return sorted(visible_text, key=lambda item: item.reading_order)
+        visible_group_ids = {item.source_group_id for item in visible_text if item.source_group_id}
+        unmatched_ocr = [
+            item
+            for item in ocr_elements
+            if item.text.strip() and item.source_group_id not in visible_group_ids
+        ]
+        return sorted(visible_text + unmatched_ocr, key=_reading_position)
     return sorted(ocr_elements, key=lambda item: item.reading_order)
+
+
+def _alternative_text_elements(
+    page_elements: List[ElementArtifact],
+    ocr_elements: List[ElementArtifact],
+    primary_text: List[ElementArtifact],
+) -> List[ElementArtifact]:
+    primary_ids = {item.element_id for item in primary_text}
+    primary_group_ids = {item.source_group_id for item in primary_text if item.source_group_id}
+    candidates = [
+        item
+        for item in page_elements + ocr_elements
+        if item.element_type in {"text_span", "hidden_text_span", "ocr_text"}
+        and item.element_id not in primary_ids
+        and item.text.strip()
+        and item.source_group_id in primary_group_ids
+    ]
+    return sorted(candidates, key=_reading_position)
+
+
+def _alternative_chunk_edges(
+    chunks: List[Any],
+    alternative_blocks: List[BlockArtifact],
+    start: int,
+) -> List[EdgeArtifact]:
+    alternatives_by_group: Dict[str, List[BlockArtifact]] = defaultdict(list)
+    for block in alternative_blocks:
+        for group_id in block.source_group_ids:
+            alternatives_by_group[group_id].append(block)
+
+    edges: List[EdgeArtifact] = []
+    for chunk in chunks:
+        used_block_ids = set(chunk.source_block_ids)
+        seen_alternatives = set(chunk.alternative_block_ids)
+        for group_id in chunk.source_group_ids:
+            for block in alternatives_by_group.get(group_id, []):
+                if block.block_id in used_block_ids or block.block_id in seen_alternatives:
+                    continue
+                chunk.alternative_block_ids.append(block.block_id)
+                seen_alternatives.add(block.block_id)
+                edges.append(
+                    EdgeArtifact(
+                        edge_id=f"edge-{start + len(edges):06d}",
+                        from_id=block.block_id,
+                        to_id=chunk.id,
+                        edge_type="alternative_for_chunk",
+                        rule_id="chunker.v1.alternative_block",
+                        evidence={
+                            "chunk_id": chunk.id,
+                            "alternative_block_id": block.block_id,
+                            "source_group_id": group_id,
+                        },
+                        confidence=1.0,
+                    )
+                )
+    return edges
 
 
 def _link_text_candidates(page_elements: List[ElementArtifact], ocr_elements: List[ElementArtifact], add_edge: Any) -> None:
@@ -588,6 +674,11 @@ def _link_text_candidates(page_elements: List[ElementArtifact], ocr_elements: Li
                 {"bbox_overlap": overlap, "text_similarity": similarity, "source_group_id": group_id},
                 confidence=1 - similarity,
             )
+
+
+def _reading_position(item: ElementArtifact) -> Tuple[int, int, int]:
+    bbox = item.bbox or [0, 0, 0, 0]
+    return (int(bbox[1]), int(bbox[0]), item.reading_order)
 
 
 def _renumber_edges(edges: List[EdgeArtifact], start: int) -> List[EdgeArtifact]:

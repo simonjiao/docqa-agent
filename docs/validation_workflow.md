@@ -9,6 +9,7 @@
 - 表格区域检测：如果页面包含明显表格线，应能检测到候选区域。
 - 来源定位：每一行 OCR 文本保存为 `ocr_text` element，保留 page、element_id、bbox，并通过 `ocr_derived_from` edge 指向页面图。
 - 关系完整性：block/chunk 必须通过 `contributes_to_block`、`contributes_to_chunk` edge 反查到原始 element。
+- 主备完整性：OCR PDF 中同区域文本层和 OCR 文本必须通过候选/等价/冲突/选择边关联，未采用候选通过 `alternative_for_chunk` 反查到 chunk。
 
 ## 2. 检索验证
 
@@ -61,4 +62,4 @@
 - needs_fix：需要重新 OCR、补充表格解析或调整检索。
 - uncertain：证据不足，需要业务专家确认。
 
-所有记录写入 `reviews.jsonl`，便于审计和复盘。
+所有记录写入 `reviews.jsonl`，同时生成 `review` element，并用 `review_of` edge 指向被复核的 block/chunk，便于审计和复盘。

@@ -47,8 +47,8 @@ Storage
 
 1. 工具选择：根据 PDF probe 结果选择 OCR 或文本抽取。
 2. 工具执行：渲染页面、OCR、表格候选区检测、文本/图片/矢量/链接等元素抽取。
-3. 元素图谱：写入 `elements.jsonl` 和 `edges.jsonl`，建立包含、渲染、OCR 派生、候选、贡献等硬关系。
-4. 知识构建：从元素图谱派生 block 和 chunk，并保留 source block/type。
+3. 元素图谱：写入 `elements.jsonl` 和 `edges.jsonl`，建立包含、渲染、OCR 派生、候选、主备选择、贡献、复核绑定等硬关系。
+4. 知识构建：从元素图谱派生 block 和 chunk，并保留 source block/type；图片内文字 OCR 如果没有同区域文本层匹配，会作为主 block 进入 chunk，已被文本层覆盖的 OCR 候选保留为 alternative block。
 5. 检索：问题进入 TF-IDF 检索，返回 top-k 证据。
 6. 回答：证据足够则抽取式回答；不足则拒答。
 7. 验证：检索分、答案证据覆盖、无答案保护、LLM 验证占位、人工验证。
@@ -59,6 +59,7 @@ Storage
 
 - 扫描件无文本层：走 OCR。
 - OCR 置信度低：标记 warn，进入人工复核。
+- OCR PDF 图片文字：文本层和 OCR 同区域时用 `text_candidate_for`、`equivalent_to`/`conflicts_with`、`chosen_over` 关联；未采用候选通过 `alternative_for_chunk` 保留。
 - 表格问题：优先提示表格候选区域，后续可接入结构化表格抽取。
 - 无答案问题：检索分低于阈值时拒答。
 - 模糊问题：返回证据和自检状态，不假装确定。

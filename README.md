@@ -99,12 +99,12 @@ AGENTS.md                 项目协作规则与调试跟踪要求
 2. `pdf_probe` 判断 PDF 类型、文本层、图片、表单、矢量和权限信号。
 3. 渲染页面并执行 OCR。
 4. 将页面、页面图、OCR 文本、表格候选、PDF 文本层、图片、矢量、链接等写入 `elements.jsonl`。
-5. 将包含、渲染、OCR 派生、候选等价、block/chunk 贡献关系写入 `edges.jsonl`。
-6. 从元素图谱派生 `blocks.jsonl` 和 `chunks.jsonl`。
+5. 将包含、渲染、OCR 派生、候选等价、主备选择、block/chunk 贡献关系写入 `edges.jsonl`。
+6. 从元素图谱派生 `blocks.jsonl` 和 `chunks.jsonl`；未匹配文本层的图片 OCR 文本进入主 chunk，同区域未采用候选保留为 alternative block。
 7. 根据用户问题检索相关 chunk，并保留 source block/type 追溯信息。
 8. 生成答案，返回页码和片段。
 9. 执行自检：证据分数、答案和证据重合度、无答案保护。
-10. 前端支持人工确认、退回或标记不确定，并保存复核记录到 `reviews.jsonl`。
+10. 前端支持人工确认、退回或标记不确定，并保存复核记录到 `reviews.jsonl`，同时追加 `review` element 和 `review_of` edge。
 
 ## 5. 验证流程
 

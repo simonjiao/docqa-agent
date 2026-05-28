@@ -59,6 +59,14 @@ def write_jsonl(path: Path, items: List[Any]) -> None:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
 
+def append_jsonl(path: Path, item: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if hasattr(item, "to_dict"):
+        item = item.to_dict()
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(item, ensure_ascii=False) + "\n")
+
+
 def read_jsonl(path: Path) -> List[Dict[str, Any]]:
     if not path.exists():
         return []
@@ -95,11 +103,54 @@ def load_document(doc_id: str) -> Dict[str, Any]:
     }
 
 
-def append_review(doc_id: str, item: Dict[str, Any]) -> None:
+def append_review(doc_id: str, item: Dict[str, Any]) -> Dict[str, Any]:
     root = doc_dir(doc_id)
-    path = root / "reviews.jsonl"
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(item, ensure_ascii=False) + "\n")
+    review_id = item["review_id"]
+    target_ids = _dedupe(
+        list(item.get("target_element_ids", []))
+        + list(item.get("target_block_ids", []))
+        + list(item.get("target_chunk_ids", []))
+    )
+    known_ids = _artifact_ids(root)
+    item["skipped_target_ids"] = [target_id for target_id in target_ids if target_id not in known_ids]
+
+    append_jsonl(root / "reviews.jsonl", item)
+
+    review_element = ElementArtifact(
+        element_id=review_id,
+        doc_id=doc_id,
+        element_type="review",
+        source_type="human_review",
+        text=item.get("notes") or item.get("result", ""),
+        raw_ref={
+            "question": item.get("question", ""),
+            "answer": item.get("answer", ""),
+            "result": item.get("result", ""),
+        },
+        quality={"status": "reviewed", "signals": []},
+    )
+    append_jsonl(root / "elements.jsonl", review_element)
+
+    edges: List[EdgeArtifact] = []
+    next_edge = _next_edge_number(root)
+    for target_id in target_ids:
+        if target_id not in known_ids:
+            continue
+        edge = EdgeArtifact(
+            edge_id=f"edge-{next_edge:06d}",
+            from_id=review_id,
+            to_id=target_id,
+            edge_type="review_of",
+            rule_id="human_review.v1.target_binding",
+            evidence={"review_id": review_id, "target_id": target_id},
+            created_by="human_review",
+            confidence=1.0,
+        )
+        append_jsonl(root / "edges.jsonl", edge)
+        edges.append(edge)
+        next_edge += 1
+
+    return {"item": item, "edges": [edge.to_dict() for edge in edges]}
 
 
 def list_reviews(doc_id: str) -> List[Dict[str, Any]]:
@@ -111,3 +162,35 @@ def clean_storage() -> None:
     if root.exists():
         shutil.rmtree(root)
     root.mkdir(parents=True, exist_ok=True)
+
+
+def _artifact_ids(root: Path) -> set[str]:
+    ids = {item["element_id"] for item in read_jsonl(root / "elements.jsonl") if item.get("element_id")}
+    ids.update(item["block_id"] for item in read_jsonl(root / "blocks.jsonl") if item.get("block_id"))
+    ids.update(item["id"] for item in read_jsonl(root / "chunks.jsonl") if item.get("id"))
+    return ids
+
+
+def _next_edge_number(root: Path) -> int:
+    next_number = 1
+    for edge in read_jsonl(root / "edges.jsonl"):
+        edge_id = str(edge.get("edge_id", ""))
+        if not edge_id.startswith("edge-"):
+            continue
+        try:
+            next_number = max(next_number, int(edge_id.removeprefix("edge-")) + 1)
+        except ValueError:
+            continue
+    return next_number
+
+
+def _dedupe(items: List[Any]) -> List[str]:
+    result = []
+    seen = set()
+    for item in items:
+        value = str(item) if item else ""
+        if not value or value in seen:
+            continue
+        result.append(value)
+        seen.add(value)
+    return result

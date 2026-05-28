@@ -350,3 +350,38 @@ evaluate.py --sample completed; sample probe pdf_type=scan_pdf
 ```
 
 剩余风险：当前元素图谱已覆盖现有 OCR、文本层、图片对象、矢量路径、链接、表单、批注、附件元数据等基础元素；`ocr_pdf` 和 `form_pdf` 已有合成 fixture，但还没有授权可提交的真实业务样本，也没有完整表格单元格恢复或签名深解析。
+
+## 2026-05-28 元素图谱 checklist 审计补齐
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：核对 checklist 是否真正完成，继续工作并及时提交；不能只看勾选状态提前宣布完成。
+
+处理摘要：
+
+- 审计发现 `review_of` 仅以 `target_chunk_ids`/`target_block_ids` 元数据落盘，没有真实 edge。
+- 审计发现 `alternative_for_chunk` 虽有 chunker 代码路径，但解析器没有生成 alternative block，现有测试也未证明该 edge 会实际落盘。
+- 审计发现 OCR PDF 中未匹配文本层的图片文字只保存为 `ocr_text` element，没有进入主 block/chunk，检索会漏掉图片内文字。
+
+修复：
+
+- 人工复核写入 `reviews.jsonl` 时，同时追加 `review` element，并为有效目标追加 `review_of` edge。
+- OCR PDF 解析时，将未匹配文本层的图片 OCR 文本作为 primary block 进入 chunk。
+- 同区域但未被采用的 visible/hidden/OCR 候选保存为 alternative block，并通过 `alternative_for_chunk` edge 指向相关 chunk。
+- 更新 checklist、README、架构说明和验证流程，去掉 “review target metadata 可替代 edge” 的折中描述。
+
+验证命令：
+
+```bash
+.venv/bin/pytest -q
+.venv/bin/python scripts/evaluate.py --sample
+```
+
+结果摘要：
+
+```text
+10 passed, 5 warnings
+evaluate.py --sample completed; sample probe pdf_type=scan_pdf
+```
+
+剩余风险：PyMuPDF/SWIG DeprecationWarning 仍存在，不影响当前测试；真实业务 PDF 的隐藏文本可见性、签名深解析和表格单元格恢复仍需后续专项样本验证。

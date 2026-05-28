@@ -58,7 +58,7 @@
 - [x] `contributes_to_block`：element 合并成 block。
 - [x] `contributes_to_chunk`：block 进入 chunk。
 - [x] `alternative_for_chunk`：未采用但相关候选。
-- [x] `review_of`：人工复核绑定 element/block/chunk。当前以 `target_chunk_ids`/`target_block_ids` 元数据落盘，未追加 edge。
+- [x] `review_of`：人工复核生成 `review` element，并通过 edge 绑定 element/block/chunk。
 
 ## 6. 派生产物
 
@@ -75,7 +75,7 @@
 - [x] `/api/docs/{doc_id}` 返回 manifest、pages、elements、edges、blocks、chunks。
 - [x] `/api/docs/{doc_id}/pages/{page_no}/recognition` 从新图谱派生 OCR lines/table regions/checks。
 - [x] `/api/docs/{doc_id}/ask` 使用新 chunk schema。
-- [x] `/api/docs/{doc_id}/reviews` 写入 `reviews.jsonl`，并保留 `review_of` edge 或 review target metadata。
+- [x] `/api/docs/{doc_id}/reviews` 写入 `reviews.jsonl`，并追加 `review_of` edge。
 - [x] 前端证据展示支持 `source_block_ids`、`source_types`。
 
 ## 8. docs-for-test
@@ -94,6 +94,8 @@
 - [x] 新增 edge 完整性测试：所有 edge 两端 ID 可解析。
 - [x] 新增 OCR 追溯测试：每个 `ocr_text` 都有 `ocr_derived_from`。
 - [x] 新增 chunk 追溯测试：每个 chunk 都有 `contributes_to_chunk`。
+- [x] 新增 OCR PDF 主备测试：图片 OCR 文本进入主 chunk，同区域未采用候选进入 `alternative_for_chunk`。
+- [x] 新增人工复核测试：`reviews.jsonl` 记录必须生成 `review` element 和 `review_of` edge。
 - [x] 运行 `.venv/bin/pytest -q`。
 - [x] 运行 `python scripts/evaluate.py --sample`。
 
