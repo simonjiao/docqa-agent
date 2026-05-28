@@ -263,3 +263,45 @@ zsh:1: command not found: pytest
 ```
 
 剩余风险：本次只新增设计文档，没有执行 PDF 解析流程或评估脚本；后续实现改造时仍需补充 JSONL 产物、隐藏文本、Markdown/HTML 派生物的专项测试。
+
+## 2026-05-28 PDF 元素图谱设计文档补强
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：目标是支持多种类型 PDF，尽可能识别 PDF 中的所有元素，并建立硬联系规则，不要折中；检查是否需要再次完善设计文档。
+
+处理摘要：
+
+- 将 `docs/pdf_parsing_refactor_design.md` 从 block-centric 设计补强为 element/edge-centric 设计。
+- 新增 `elements.jsonl`、`edges.jsonl`、`tables.jsonl`、`forms.jsonl`、`annotations.jsonl`、`attachments.jsonl` 等目标产物。
+- 明确 `elements.jsonl` 是最细粒度事实源，`blocks.jsonl`、`chunks.jsonl`、Markdown、HTML 都是派生视图。
+- 补充 PDF 元素类型清单、不同 PDF 类型的最低元素覆盖要求、硬联系边类型和生成规则。
+- 强化约束：不可静默丢弃未支持元素，需记录 `unsupported_element`、`blocked_by_permission` 或 `needs_specialized_parser`。
+
+遇到的问题：
+
+```bash
+rg -n "主事实源|blocks\.jsonl 保存|generated_from|block overlay|block 级|visible_text` blocks|image_ocr` blocks|hidden_text` blocks|^## |^### |blocked_by_permission|needs_specialized_parser" docs/pdf_parsing_refactor_design.md
+```
+
+结果：
+
+```text
+zsh:1: unmatched "
+```
+
+根因：搜索表达式中同时包含双引号和反引号，shell 解析失败。后续改用单引号包裹 rg pattern。
+
+验证命令：
+
+```bash
+.venv/bin/pytest -q
+```
+
+结果摘要：
+
+```text
+6 passed, 5 warnings in 0.84s
+```
+
+剩余风险：本次仍是设计文档更新，未实现元素图谱、关系边生成器或专项 PDF 样本测试。pytest 警告来自 PyMuPDF/SWIG 相关 DeprecationWarning，未影响现有测试通过。
