@@ -66,6 +66,30 @@ storage/{doc_id}/
 | 可追溯性 | chunk 追溯到 line_id | chunk 追溯到 block_id、page、bbox、source_type |
 | 产物格式 | JSON 文件为主 | JSONL 主事实源，Markdown 给 LLM，HTML 给人工 |
 
+### 2.4 PDF 类型覆盖反思
+
+当前文档已经提出了“文档级 + 页级 + block 级判断”，也设计了 `visible_text`、`hidden_text`、`image_ocr`、`form_field` 等来源类型，但原版本没有把常见 PDF 类型显式列成处理矩阵。实际改造时应把 PDF 类型判断作为解析入口的第一层分流，再在页级和 block 级细化。
+
+推荐类型矩阵：
+
+| 类型 | 识别信号 | 初次解析策略 | 主要产物 |
+| --- | --- | --- | --- |
+| `text_pdf` | 可抽取文本充足，字体和文本 block 正常，图片不是主体 | 直接抽取 PDF 文本，保留 bbox 和阅读顺序；必要时抽样渲染校验 | `visible_text` blocks |
+| `scan_pdf` | 文本层为空或极少，每页大图覆盖主体内容 | 整页渲染后 OCR；OCR 置信度低时进入人工复核 | `image_ocr` blocks、page image |
+| `ocr_pdf` | 页面像扫描图，但存在可搜索文本层或不可见文本层 | 抽取隐藏文本并做质量评估；必要时重新 OCR 对照，不直接信任文本层 | `hidden_text` blocks、可选 `image_ocr` blocks |
+| `mixed_pdf` | 不同页或同页同时出现文本、扫描图、表格、批注 | 逐页选择文本抽取、OCR 或混合策略；chunk 保留多来源 metadata | 多种 source_type blocks |
+| `form_pdf` | 存在 AcroForm/XFA 字段或字段值不完整显示在页面文本中 | 读取表单字段；同时渲染页面用于视觉核对；字段值单独保存 | `form_field` blocks |
+| `protected_pdf` | 加密、需要密码，或权限限制复制/抽取/打印 | 先做权限预检；不能打开则提示用户提供授权密码；权限不足时不静默绕过 | manifest permission 状态、错误或降级策略 |
+| `drawing_pdf` | 大量矢量线条、CAD/图纸/地图，普通文本抽取很少 | 保留页面图和图形/文本候选；OCR 只处理标签文字；标记需要版面/视觉理解 | `image`、`visible_text`、低置信 review blocks |
+
+`pdf_type` 不应只能有一个全局值。更稳妥的做法是：
+
+- `manifest.json` 保存文档级主类型和候选类型。
+- `pages.jsonl` 保存每页 `page_type` 和 `strategy`。
+- `blocks.jsonl` 保存每个内容块的 `source_type`。
+
+这样可以避免把混合文档误判成单一 PDF 类型。
+
 ## 3. 设计目标
 
 1. 保留当前最小闭环，不破坏现有上传、问答、复核功能。
@@ -142,12 +166,21 @@ storage/{doc_id}/
   },
   "pdf_probe": {
     "pdf_type": "mixed_pdf",
+    "pdf_type_candidates": ["ocr_pdf", "scan_pdf"],
     "pages": 4,
     "has_text_layer": true,
     "has_hidden_text": true,
     "has_images": true,
     "has_forms": false,
-    "is_encrypted": false
+    "has_vector_drawings": false,
+    "is_encrypted": false,
+    "permission": {
+      "requires_password": false,
+      "authenticated": true,
+      "allows_text_extraction": true,
+      "allows_rendering": true,
+      "action": "parse"
+    }
   },
   "outputs": {
     "pages": "pages.jsonl",
@@ -217,8 +250,37 @@ storage/{doc_id}/
 - `annotation`：批注、签名、注释。
 - `table_cell`：表格单元格。
 - `image`：图片或非文本区域。
+- `drawing_element`：图纸、地图、CAD 类矢量线条或区域。
 
-### 6.4 chunks.jsonl
+### 6.4 protected_pdf 权限处理
+
+受保护 PDF 应在正文解析前先进入权限预检，不应等 OCR 或文本抽取失败后才发现。
+
+建议处理：
+
+1. 打开前记录文件 hash 和基础元信息。
+2. 检查是否加密、是否需要用户密码、当前权限是否允许文本抽取和页面渲染。
+3. 如果需要密码，返回 `protected_pdf` 状态并提示用户提供授权密码；密码只用于本次解析，不写入持久化产物。
+4. 如果可以打开但权限禁止文本抽取，默认不要静默绕过；在 `manifest.permission.action` 中标记为 `needs_authorization` 或 `render_only_with_authorization`。
+5. 如果业务流程明确拥有授权且允许渲染，可降级为页面渲染 + OCR，但必须在 manifest 中保留权限状态和降级原因。
+6. 如果既不能抽取也不能渲染，则保存失败状态，不生成伪造的空 blocks。
+
+示例权限状态：
+
+```json
+{
+  "pdf_type": "protected_pdf",
+  "permission": {
+    "requires_password": true,
+    "authenticated": false,
+    "allows_text_extraction": false,
+    "allows_rendering": false,
+    "action": "request_password"
+  }
+}
+```
+
+### 6.5 chunks.jsonl
 
 给检索和 LLM 使用的派生产物。一行一个 chunk。
 
