@@ -10,7 +10,14 @@ let state = {
 
 const $ = (id) => document.getElementById(id);
 
-function setStatus(text) { $("statusText").textContent = text; }
+function setStatus(text) {
+  const statusText = $("statusText");
+  if (statusText) {
+    statusText.textContent = text;
+  } else {
+    $("status").textContent = text;
+  }
+}
 
 function setUploadBusy(isBusy) {
   state.isUploading = isBusy;
@@ -70,9 +77,10 @@ async function uploadPdf() {
   }
 }
 
-function openUploadDialog() {
+function openUploadDialog(event) {
   if (state.isUploading) return;
-  $("fileInput").click();
+  if (event?.target === fileInputEl) return;
+  fileInputEl.click();
 }
 
 function drawBox(bbox, imageWidth, imageHeight) {
@@ -167,14 +175,19 @@ async function loadReviews() {
   `).join("") || "<p class='small'>暂无人工复核记录。</p>";
 }
 
-$("status").onclick = openUploadDialog;
-$("status").onkeydown = (event) => {
+const statusEl = $("status");
+const fileInputEl = $("fileInput");
+statusEl.addEventListener("click", openUploadDialog);
+statusEl.addEventListener("keydown", (event) => {
   if (event.key === "Enter" || event.key === " ") {
     event.preventDefault();
-    openUploadDialog();
+    openUploadDialog(event);
   }
-};
-$("fileInput").onchange = uploadPdf;
+});
+fileInputEl.addEventListener("click", (event) => event.stopPropagation());
+fileInputEl.addEventListener("change", uploadPdf);
+statusEl.dataset.uploadBound = "true";
+fileInputEl.dataset.uploadBound = "true";
 $("prevPage").onclick = () => loadPage(state.currentPage - 1);
 $("nextPage").onclick = () => loadPage(state.currentPage + 1);
 $("askBtn").onclick = ask;
