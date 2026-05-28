@@ -58,7 +58,7 @@ pip install -r requirements.txt
 http://localhost:8000
 ```
 
-可以点击“加载样例 PDF”，或上传新的 PDF。项目包内保留了样例识别缓存，便于快速演示；如需强制重新 OCR，可设置 `FORCE_REPROCESS=1` 或清空 `storage/`。
+可以上传新的 PDF。项目包内保留了样例识别缓存，便于评估脚本和接口验证；如需强制重新 OCR，可设置 `FORCE_REPROCESS=1` 或清空 `storage/`。
 
 ## 3. 代码结构
 

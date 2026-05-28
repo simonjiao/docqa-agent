@@ -57,13 +57,6 @@ async function uploadPdf() {
   await loadDocMeta(await res.json());
 }
 
-async function loadSample() {
-  setStatus("正在加载样例 PDF 并进行 OCR，请稍候……");
-  const res = await fetch("/api/load-sample", { method: "POST" });
-  if (!res.ok) { setStatus(await res.text()); return; }
-  await loadDocMeta(await res.json());
-}
-
 function drawBox(bbox, imageWidth, imageHeight) {
   const img = $("pageImage");
   const canvas = $("overlay");
@@ -113,7 +106,7 @@ async function loadPage(pageNo) {
 }
 
 async function ask() {
-  if (!state.docId) { setStatus("请先上传或加载 PDF。"); return; }
+  if (!state.docId) { setStatus("请先上传 PDF。"); return; }
   const question = $("question").value.trim();
   if (!question) return;
   const result = await postJson(`/api/docs/${state.docId}/ask`, { question, top_k: 4 });
@@ -157,7 +150,6 @@ async function loadReviews() {
 }
 
 $("uploadBtn").onclick = uploadPdf;
-$("sampleBtn").onclick = loadSample;
 $("prevPage").onclick = () => loadPage(state.currentPage - 1);
 $("nextPage").onclick = () => loadPage(state.currentPage + 1);
 $("askBtn").onclick = ask;

@@ -1,5 +1,11 @@
 # Project Agent Rules
 
+## 提交规则
+
+除非用户明确要求不要提交，完成变更并验证通过后应及时自动提交。
+
+每次提交的说明使用中文，且总行数不超过 3 行。
+
 ## Debug Trace Documentation
 
 When debugging this project, keep durable context in `docs/debug_trace.md`. Update it whenever:

@@ -191,3 +191,35 @@ tmux capture-pane -pt docqa_agent_prototype:1.1 -S -80
 ```
 
 注意：该 session 的窗口编号为 `1`，pane 编号为 `1`；使用 `docqa_agent_prototype:0` 会报 `can't find window: 0`。
+
+## 2026-05-28 上传控件布局调整
+
+用户要求将上传区域合并成一行，并去掉“加载样例 PDF”按钮。
+
+处理摘要：
+
+- 删除前端模板中的 `sampleBtn` 按钮。
+- 删除前端脚本中的 `loadSample()` 和 `sampleBtn` 绑定。
+- 将无文档时的问答提示从“请先上传或加载 PDF。”改为“请先上传 PDF。”。
+- 为 `.actions input[type="file"]` 添加局部样式，覆盖全局 `input { width: 100% }`，避免文件选择控件单独占满一行。
+- 同步 README、演示脚本和面试答复文档，避免继续描述 UI 上已删除的样例按钮。
+
+验证命令：
+
+```bash
+rg -n "sampleBtn|加载样例 PDF|请先上传或加载" app README.md docs --glob '!docs/debug_trace.md'
+.venv/bin/python -m pytest -q
+```
+
+结果摘要：
+
+```text
+功能代码和说明文档无残留匹配，调试跟踪保留历史记录
+6 passed, 5 warnings
+```
+
+运行验证：
+
+- 重启时发现原 `docqa_agent_prototype` tmux session 已不存在，8000 端口未监听。
+- 重新创建 tmux session 后，第一次 HTTP 探针过早返回 `000`；随后端口监听正常，`GET /` 返回 `200`。
+- 使用浏览器检查 `http://127.0.0.1:8000/`：`#sampleBtn` 不存在，`.actions` 为 `display: flex` 且 `flex-wrap: nowrap`，页面视觉上文件选择控件和“上传并解析”在同一行。
