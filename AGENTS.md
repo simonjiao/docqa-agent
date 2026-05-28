@@ -6,6 +6,10 @@
 
 每次提交的说明使用中文，且总行数不超过 3 行。
 
+## 本地 Python 命令规则
+
+本项目在非交互 shell 中不要使用裸 `python` 命令；运行 Python 脚本、内联调试片段、编译检查和项目验证时，默认使用 `.venv/bin/python`。
+
 ## Debug Trace Documentation
 
 When debugging this project, keep durable context in `docs/debug_trace.md`. Update it whenever:

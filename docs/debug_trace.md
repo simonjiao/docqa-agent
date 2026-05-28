@@ -1021,3 +1021,31 @@ tables=0
 ```
 
 剩余风险：该规则只作用于无边框表格文本对齐推断；有真实 ruling lines 的表格和图片内图表过滤仍走各自已有规则。
+
+## 2026-05-28 13:58:52 CST 项目 Python 命令规则固化
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：将“这个项目应继续用 `.venv/bin/python`”加入项目规则。
+
+处理：
+
+- 在 `AGENTS.md` 新增“本地 Python 命令规则”小节。
+- 明确非交互 shell 中不要使用裸 `python` 命令；运行 Python 脚本、内联调试片段、编译检查和项目验证时默认使用 `.venv/bin/python`。
+
+背景：
+
+- 此前调试中遇到 `zsh:1: command not found: python`。
+- 项目虚拟环境中的 `.venv/bin/python` 可用，且已用于测试、评估和解析命令。
+
+验证：
+
+```text
+.venv/bin/python --version
+Python 3.13.1
+
+git diff --check
+passed
+```
+
+剩余风险：该规则约束 Codex/项目内命令习惯；不修改系统 PATH，也不创建 `python` shim。
