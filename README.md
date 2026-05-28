@@ -106,6 +106,7 @@ tests/
   pytest 单元测试
 vendor/
   mini-agent/             本项目内置 Agent/LLM 客户端支持
+FOLLOWUP.md               后续负责人说明：LLM 增强、规则、安全合规和 AI 辅助工作方式
 AGENTS.md                 项目协作规则与调试跟踪要求
 ```
 
