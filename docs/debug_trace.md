@@ -223,3 +223,43 @@ rg -n "sampleBtn|加载样例 PDF|请先上传或加载" app README.md docs --gl
 - 重启时发现原 `docqa_agent_prototype` tmux session 已不存在，8000 端口未监听。
 - 重新创建 tmux session 后，第一次 HTTP 探针过早返回 `000`；随后端口监听正常，`GET /` 返回 `200`。
 - 使用浏览器检查 `http://127.0.0.1:8000/`：`#sampleBtn` 不存在，`.actions` 为 `display: flex` 且 `flex-wrap: nowrap`，页面视觉上文件选择控件和“上传并解析”在同一行。
+
+## 2026-05-28 PDF 解析产物设计文档验证
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：不要改业务代码，基于当前项目生成 PDF 初次解析产物改造设计文档，说明如何保存隐藏文本、OCR、Markdown、HTML 和人工/LLM 复核相关内容。
+
+处理摘要：
+
+- 新增 `docs/pdf_parsing_refactor_design.md`，只做设计文档，不改业务代码。
+- 文档对比当前 `meta.json`、`pages.json`、`chunks.json` 存储方式与目标 `manifest.json`、`pages.jsonl`、`blocks.jsonl`、`chunks.jsonl`、Markdown、HTML 派生产物。
+- 文档明确隐藏文本应作为独立 `source_type=hidden_text` 候选文本源保存，不直接和 OCR 文本混合。
+
+遇到的问题：
+
+```bash
+pytest -q
+```
+
+结果：
+
+```text
+zsh:1: command not found: pytest
+```
+
+当前假设：本机全局 PATH 未暴露 `pytest`，但项目虚拟环境中存在 `.venv/bin/pytest`。
+
+验证命令：
+
+```bash
+.venv/bin/pytest -q
+```
+
+结果摘要：
+
+```text
+6 passed, 5 warnings in 0.84s
+```
+
+剩余风险：本次只新增设计文档，没有执行 PDF 解析流程或评估脚本；后续实现改造时仍需补充 JSONL 产物、隐藏文本、Markdown/HTML 派生物的专项测试。
