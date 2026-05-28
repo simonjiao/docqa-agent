@@ -1147,3 +1147,25 @@ internal chunk references in answers=false
 - 编译和导入检查会生成 `__pycache__`，提交前已从 `vendor/mini-agent` 清理。
 
 剩余风险：真实 LLM 已通过 `/ask` smoke 和 5 个样例问题评估；后续仍需按真实业务 PDF 继续扩展 golden set。
+
+## 2026-05-28 14:27:00 CST env.example 模板
+
+工作目录：`/Users/simon/ai-agents/docqa_agent_prototype`
+
+用户要求：生成 `env.example`。
+
+处理：
+
+- 新增 `.env.example`，用于复制为本地 `.env`。
+- 只写占位值，不包含真实 API key。
+- 包含 QA 必需的 `DOCQA_LLM_BASE_URL`、`DOCQA_LLM_API_KEY`、`DOCQA_LLM_MODEL`。
+- 同时列出 OCR 和运行默认项：`OCR_LANG`、`OCR_DPI`、`OCR_TIMEOUT`、`STORAGE_DIR`、`PORT`。
+
+验证：
+
+```text
+git diff --check
+passed
+```
+
+剩余风险：`.env.example` 是模板；真实 `.env` 仍由 `.gitignore` 排除，不能提交。
